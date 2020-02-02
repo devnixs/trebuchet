@@ -1,5 +1,5 @@
 import MathJs, { Matrix } from "mathjs";
-import { rotateVectorAlongZ } from "../utils/vector-utils";
+import { rotateVectorAlongZ, rotateVector, rotateVectorAlongMatrix } from "../utils/vector-utils";
 import { Constraint } from "./models/constraint";
 import { Pivot } from "./models/pivot";
 import { Solid } from "./models/solid";
@@ -68,8 +68,12 @@ export class Engine {
       const constraintsOfThisSolid = this.constraints.filter(i => i.object1 === solid || i.object2 === solid);
 
       equations.push({
-        rightSide: 0,
         terms: [
+          {
+            value: 0,
+            element: null,
+            unknownFactor: "none"
+          },
           {
             unknownFactor: "d²x/dt",
             value: solid.mass,
@@ -87,8 +91,12 @@ export class Engine {
       });
 
       equations.push({
-        rightSide: solid.mass * this.gravity,
         terms: [
+          {
+            value: solid.mass * this.gravity,
+            element: null,
+            unknownFactor: "none"
+          },
           {
             unknownFactor: "d²y/dt",
             value: solid.mass,
@@ -116,7 +124,6 @@ export class Engine {
       const constraintsOfThisSolid = this.constraints.filter(i => i.object1 === solid || i.object2 === solid);
 
       equations.push({
-        rightSide: solid.mass * this.gravity,
         terms: [
           {
             unknownFactor: "d²w/dt",
@@ -163,18 +170,136 @@ export class Engine {
     }
   }
 
+  private getPointSpeedInSolid(chain: ChainOfSolid, point: Matrix): Matrix {
+    //  V M/R = VM/R' + VO'/R + dw/dt ^ O'M
+    //            0
+
+    const baseSpeed = MathJs.cross(chain.element.rotationalSpeed, rotateVectorAlongMatrix(chain.element.rotation, point)) as Matrix;
+
+    if (!chain.parent) {
+      return baseSpeed as Matrix;
+    } else {
+      const originSpeed = this.getPointSpeedInSolid(
+        chain.parent,
+        chain.parentConstraint.object1 === chain.element ? chain.parentConstraint.object2Position : chain.parentConstraint.object1Position
+      );
+      return MathJs.add(baseSpeed, originSpeed) as Matrix;
+    }
+  }
+
+  private getPointAccelerationInSolid(chain: ChainOfSolid, point: Matrix, axis: Matrix) {
+    //  aM/R = aO'/R  + d²w/dt² ^ O'M + dw/dt ^ dO'M/dt
+    //    F       A       B        C      D         E
+
+    const pivotPosition = chain.parentConstraint.object1 === chain.element ? chain.parentConstraint.object1Position : chain.parentConstraint.object2Position;
+
+    // O'M = GM - GO'
+    var GM = rotateVectorAlongMatrix(chain.element.rotation, point);
+    var GOp = rotateVectorAlongMatrix(chain.element.rotation, pivotPosition);
+    var OpM = MathJs.subtract(GM, GOp) as Matrix;
+
+    // O'M = OM - OO'
+
+    var dOMdt = this.getPointSpeedInSolid(chain, point);
+    var dOOpdt = this.getPointSpeedInSolid(chain, pivotPosition);
+    var dOpMdt = MathJs.subtract(dOMdt, dOOpdt) as Matrix;
+    var DE = MathJs.cross(chain.element.rotationalSpeed, dOpMdt);
+
+    let terms: EquationTerm[] = [
+      // F
+      {
+        element: chain.element,
+        unknownFactor: axis.toString() === "[[1], [0], [0]]" ? "d²x/dt" : "d²y/dt",
+        value: 1
+      },
+      // B ^ C
+      {
+        element: chain.element,
+        unknownFactor: "d²w/dt",
+        value: MathJs.dot(OpM, axis)
+      },
+      {
+        element: chain.element,
+        unknownFactor: "none",
+        value: MathJs.dot(DE, axis)
+      }
+    ];
+
+    if (chain.parent) {
+      // A
+      const positionOfPivotInParent =
+        chain.parentConstraint.object1 === chain.element ? chain.parentConstraint.object2Position : chain.parentConstraint.object1Position;
+      const A = this.getPointAccelerationInSolid(chain.parent, positionOfPivotInParent, axis);
+      terms = terms.concat(A);
+    }
+
+    return terms;
+  }
+
   private addPivotRelationshipInner(chain: ChainOfSolid) {
     let equations: Equation[] = [];
 
-    // aG = aP/R + d²w/dt² ^ PG + dw/dt ^ dPG/dt
+    // P is the pivot point
 
-    const xTerms : EquationTerm[] = [{
-        element : chain.element, 
-        unknownFactor: 'd²x/dt',
+    // aG = aP/R + d²w/dt² ^ PG + dw/dt ^ dPG/dt
+    //  A     B            C           D
+
+    // dPG/dt = OG - OP;
+    const dOGdt = this.getPointSpeedInSolid(chain, MathJs.zeros(3, 1) as Matrix);
+    const pivotPosition = chain.parentConstraint.object1 === chain.element ? chain.parentConstraint.object1Position : chain.parentConstraint.object2Position;
+    const dOPdt = this.getPointSpeedInSolid(chain, pivotPosition);
+    const dPGdt = MathJs.subtract(dOGdt, dOPdt) as Matrix;
+    const D = MathJs.cross(chain.element.rotationalSpeed, dPGdt) as Matrix;
+
+    const xAxis = MathJs.matrix([[1], [0], [0]]);
+    const yAxis = MathJs.matrix([[1], [0], [0]]);
+    const zAxis = MathJs.matrix([[0], [0], [1]]);
+
+    const xTerms: EquationTerm[] = [
+      // A
+      {
+        element: chain.element,
+        unknownFactor: "d²x/dt",
         value: 1
-    }, {
-        
-    }];
+      },
+      // C
+      {
+        element: chain.element,
+        unknownFactor: "d²w/dt",
+        value: -MathJs.dot(yAxis, rotateVectorAlongZ(MathJs.dot(zAxis, chain.element.rotation) as any, pivotPosition))
+      },
+      // D
+      {
+        element: null,
+        unknownFactor: "none",
+        value: MathJs.dot(xAxis, D)
+      },
+      ...this.getPointAccelerationInSolid(chain, pivotPosition, xAxis)
+    ];
+    equations.push({ terms: xTerms });
+
+    const yTerms: EquationTerm[] = [
+      // A
+      {
+        element: chain.element,
+        unknownFactor: "d²y/dt",
+        value: 1
+      },
+      // C
+      {
+        element: chain.element,
+        unknownFactor: "d²w/dt",
+        value: MathJs.dot(xAxis, rotateVectorAlongZ(MathJs.dot(zAxis, chain.element.rotation) as any, pivotPosition))
+      },
+      // D
+      {
+        element: null,
+        unknownFactor: "none",
+        value: MathJs.dot(yAxis, D)
+      },
+      ...this.getPointAccelerationInSolid(chain, pivotPosition, yAxis)
+    ];
+    equations.push({ terms: yTerms });
 
     const getParentsConstraints: (a: ChainOfSolid) => Constraint[] = (a: ChainOfSolid) =>
       a.parentConstraint ? [a.parentConstraint, ...getParentsConstraints(a.parent)] : [a.parentConstraint];
@@ -222,5 +347,8 @@ export class Engine {
     let equations: Equation[] = [];
     equations = equations.concat(this.applySumOfForces());
     equations = equations.concat(this.applyDynamicMomentEquation());
+    equations = equations.concat(this.addPivotRelationships());
+
+    
   }
 }

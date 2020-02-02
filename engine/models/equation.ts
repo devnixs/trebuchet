@@ -1,15 +1,14 @@
 import { Constraint } from "./constraint";
 import { Solid } from "./solid";
 
-export type UnkownFactor = "d²x/dt" | "d²y/dt" | "d²w/dt" | "xforce" | "yforce";
+export type UnkownFactor = "d²x/dt" | "d²y/dt" | "d²w/dt" | "xforce" | "yforce" | 'none';
 
 export interface EquationTerm {
   unknownFactor: UnkownFactor;
-  element: Solid | Constraint;
+  element: Solid | Constraint | null;
   value: number;
 }
 
 export interface Equation {
   terms: EquationTerm[];
-  rightSide: number;
 }
