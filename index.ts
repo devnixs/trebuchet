@@ -4,7 +4,7 @@ import "@fortawesome/fontawesome-free/css/all.css";
 import { Solid } from "./engine/models/solid";
 import { matrix, add, Matrix } from "mathjs";
 import * as MathJs from "mathjs";
-import { Pivot } from "./engine/models/constraint";
+import { Pivot } from "./engine/models/pivot";
 
 console.log("hello world");
 const constants = {
@@ -18,24 +18,16 @@ const constants = {
   armMass: 10,
   armWidth: 0.3
 };
-const counterWeightInertia = MathJs.parse(
-  "(2/5) * counterWeightMass * counterweightRadius ^ 2"
-);
-const counterWeightInertiaValue = counterWeightInertia
-  .compile()
-  .evaluate(constants);
+const counterWeightInertia = MathJs.parse("(2/5) * counterWeightMass * counterweightRadius ^ 2");
+const counterWeightInertiaValue = counterWeightInertia.compile().evaluate(constants);
 
-const armInertia = MathJs.parse(
-  "armMass * ((lengthOfLongArm + lengthOfShortArm) ^ 2 + armWidth ^ 2) / 6"
-);
+const armInertia = MathJs.parse("armMass * ((lengthOfLongArm + lengthOfShortArm) ^ 2 + armWidth ^ 2) / 6");
 const armInertiaValue = armInertia.compile().evaluate(constants);
 
 var counterweight = new Solid({
   name: "Counterweight",
   initialPosition: MathJs.parse(
-    "[0; heightOfPivot; 0] + " +
-      " [lengthOfShortArm * cos(initialAngle); lengthOfShortArm * sin(initialAngle); 0] +" +
-      " [0; - counterWeightLength; 0]"
+    "[0; heightOfPivot; 0] + " + " [lengthOfShortArm * cos(initialAngle); lengthOfShortArm * sin(initialAngle); 0] +" + " [0; - counterWeightLength; 0]"
   )
     .compile()
     .evaluate(constants) as Matrix,
@@ -81,9 +73,7 @@ var armCounterweightPivot = new Pivot({
   name: "Arm to counterweight pivot",
   object1: arm,
   object1Position: MathJs.parse(
-    " [((lengthOfLongArm + lengthOfShortArm) / 2) * Math.cos(initialAngle);" +
-      "  ((lengthOfLongArm + lengthOfShortArm) / 2) * Math.sin(initialAngle);" +
-      "  0]"
+    " [((lengthOfLongArm + lengthOfShortArm) / 2) * Math.cos(initialAngle);" + "  ((lengthOfLongArm + lengthOfShortArm) / 2) * Math.sin(initialAngle);" + "  0]"
   )
     .compile()
     .evaluate(constants) as Matrix,
@@ -92,7 +82,5 @@ var armCounterweightPivot = new Pivot({
     .compile()
     .evaluate(constants) as Matrix
 });
-
-
 
 console.log(counterweight);

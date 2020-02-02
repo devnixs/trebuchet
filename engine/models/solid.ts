@@ -8,7 +8,6 @@ interface SolidSettings {
   mass: number;
 }
 
-
 export class Solid {
   constructor(settings: SolidSettings) {
     this.position = settings.initialPosition;
@@ -27,8 +26,6 @@ export class Solid {
 
   acceleration: Matrix;
   rotationalAcceleration: Matrix;
-
-  constraints: Constraint[];
 
   toString() {
     return this.name;
