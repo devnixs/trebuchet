@@ -8,6 +8,7 @@ import { ChainOfSolid } from "./models/chain-of-solid";
 import { Vector3 } from "./models/vector3";
 import { Matrix33 } from "./models/matrix33";
 import { Solver } from "./models/solver";
+import { Ponctual } from "./models/ponctual";
 
 interface EngineSettings {
   solids: Solid[];
@@ -189,7 +190,7 @@ export class Engine {
     return A.add(BC);
   }
 
-  private addPivotRelationships2() {
+  private addPivotRelationships() {
     const equations = [] as Equation[];
 
     // Acceleration of pivotal point P =
@@ -240,6 +241,103 @@ export class Engine {
     return equations;
   }
 
+  addPonctualRelationships() {
+    const equations = [] as Equation[];
+
+    // Acceleration of pivotal point P =
+    // aG + d²w/dt ^ GP + dw/dt ^ dGP/dt
+    //  A      B     C       D      E
+
+    for (const pivot of this.constraints.filter(i => i instanceof Ponctual).map(i => i as Ponctual)) {
+      // Acceleration of pivotal point is the same for both solids
+
+      // firstTerm
+      const C1 = rotateVectorAlongVector(pivot.object1.rotation, pivot.object1Position);
+      const D1 = pivot.object1.rotationalSpeed;
+      const E1 = this.getPointSpeed(pivot.object1, pivot.object1Position).subtract(pivot.object1.speed);
+
+      const xTerms: EquationTerm[] = [
+        { element: pivot.object1, unknownFactor: "d²x/dt", value: 1 },
+        { element: pivot.object1, unknownFactor: "d²w/dt", value: -C1.y },
+        { element: pivot.object1, unknownFactor: "none", value: -D1.cross(E1).x }
+      ];
+      const yTerms: EquationTerm[] = [
+        { element: pivot.object1, unknownFactor: "d²y/dt", value: 1 },
+        { element: pivot.object1, unknownFactor: "d²w/dt", value: C1.x },
+        { element: pivot.object1, unknownFactor: "none", value: -D1.cross(E1).y }
+      ];
+
+      // if there's no other part to the pivot, then the acceleration is 0, else, substract the other part of the equation : a = b => a-b=0
+      // secondTerm
+      if (pivot.object2) {
+        const C2 = rotateVectorAlongVector(pivot.object2.rotation, pivot.object2Position);
+        const D2 = pivot.object2.rotationalSpeed;
+        const E2 = this.getPointSpeed(pivot.object2, pivot.object2Position).subtract(pivot.object2.speed);
+        xTerms.push({ element: pivot.object2, unknownFactor: "d²x/dt", value: -1 });
+        xTerms.push({ element: pivot.object2, unknownFactor: "d²w/dt", value: C2.y });
+        xTerms.push({ element: pivot.object2, unknownFactor: "none", value: D2.cross(E2).x });
+        yTerms.push({ element: pivot.object2, unknownFactor: "d²y/dt", value: -1 });
+        yTerms.push({ element: pivot.object2, unknownFactor: "d²w/dt", value: -C2.x });
+        yTerms.push({ element: pivot.object2, unknownFactor: "none", value: D2.cross(E2).y });
+      }
+
+      if (!pivot.isAlongX) {
+        equations.push({
+          terms: xTerms
+        });
+      } else {
+        equations.push({
+          terms: yTerms
+        });
+      }
+    }
+    return equations;
+  }
+
+  private addConstraintsDegreeOfFreedom() {
+    const equations = [] as Equation[];
+
+    for (const constraint of this.constraints) {
+      if (constraint instanceof Pivot) {
+        // pivots don't convey any torque
+        equations.push({
+          terms: [
+            { element: constraint, unknownFactor: "ztorque", value: 1 },
+            { element: null, unknownFactor: "none", value: 0 }
+          ]
+        });
+      }
+      if (constraint instanceof Ponctual) {
+        // ponctuals don't convey any torque
+        equations.push({
+          terms: [
+            { element: constraint, unknownFactor: "ztorque", value: 1 },
+            { element: null, unknownFactor: "none", value: 0 }
+          ]
+        });
+        // ponctuals don't convey any force along their axis
+
+        // TODO: change this to support arbitrary axis, also allow this to work on moving parts.
+        if (constraint.isAlongX) {
+          equations.push({
+            terms: [
+              { element: constraint, unknownFactor: "xforce", value: 1 },
+              { element: null, unknownFactor: "none", value: 0 }
+            ]
+          });
+        } else {
+          equations.push({
+            terms: [
+              { element: constraint, unknownFactor: "yforce", value: 1 },
+              { element: null, unknownFactor: "none", value: 0 }
+            ]
+          });
+        }
+      }
+    }
+    return equations;
+  }
+
   private runChecks() {
     const solidWithNoConstraint = this.solids.find(s => !this.constraints.find(c => c.object1 === s || c.object2 === s));
     if (solidWithNoConstraint) {
@@ -263,7 +361,9 @@ export class Engine {
     let equations: Equation[] = [];
     equations = equations.concat(this.applySumOfForces());
     equations = equations.concat(this.applyDynamicMomentEquation());
-    equations = equations.concat(this.addPivotRelationships2());
+    equations = equations.concat(this.addPivotRelationships());
+    equations = equations.concat(this.addPonctualRelationships());
+    equations = equations.concat(this.addConstraintsDegreeOfFreedom());
 
     const solver = new Solver(equations);
     const solutions = solver.solve();
@@ -287,22 +387,29 @@ export class Engine {
         if (solution.unknown === "yforce") {
           solution.element.forceAppliedToFirstObject.y = solution.value;
         }
+        if (solution.unknown === "ztorque") {
+          solution.element.torqueAppliedToFirstObject.z = solution.value;
+        }
       }
     }
 
     // with time, a small bias may appear, we need to fix up the constraints
 
     for (const constraint of this.constraints) {
-      const positionOfConstraintInObject1 = constraint.object1.position.add(rotateVectorAlongVector(constraint.object1.rotation, constraint.object1Position));
+      if (constraint instanceof Pivot) {
+        const positionOfConstraintInObject1 = constraint.object1.position.add(rotateVectorAlongVector(constraint.object1.rotation, constraint.object1Position));
 
-      if (constraint.object2) {
-        const positionOfConstraintInObject2 = constraint.object2.position.add(rotateVectorAlongVector(constraint.object2.rotation, constraint.object2Position));
-        const difference = positionOfConstraintInObject2.subtract(positionOfConstraintInObject1);
-        constraint.object2.position = constraint.object2.position.subtract(difference);
-      } else {
-        // it is fixed to the ground
-        var difference = constraint.initialPosition.subtract(positionOfConstraintInObject1);
-        constraint.object1.position = constraint.object1.position.add(difference);
+        if (constraint.object2) {
+          const positionOfConstraintInObject2 = constraint.object2.position.add(
+            rotateVectorAlongVector(constraint.object2.rotation, constraint.object2Position)
+          );
+          const difference = positionOfConstraintInObject2.subtract(positionOfConstraintInObject1);
+          constraint.object2.position = constraint.object2.position.subtract(difference);
+        } else {
+          // it is fixed to the ground
+          var difference = constraint.initialPosition.subtract(positionOfConstraintInObject1);
+          constraint.object1.position = constraint.object1.position.add(difference);
+        }
       }
     }
 

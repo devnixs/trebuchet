@@ -1,7 +1,7 @@
 import { Constraint } from "./constraint";
 import { Solid } from "./solid";
 
-export type UnkownFactor = "d²x/dt" | "d²y/dt" | "d²w/dt" | "xforce" | "yforce" | 'none';
+export type UnkownFactor = "d²x/dt" | "d²y/dt" | "d²w/dt" | "xforce" | "yforce" | "ztorque" | "none";
 
 export interface EquationTerm {
   unknownFactor: UnkownFactor;

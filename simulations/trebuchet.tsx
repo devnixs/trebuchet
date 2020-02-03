@@ -8,7 +8,8 @@ import { Matrix33 } from "../engine/models/matrix33";
 import { Pivot } from "../engine/models/pivot";
 import { Solid } from "../engine/models/solid";
 import { Vector3 } from "../engine/models/vector3";
-import { rotateVectorAlongZ } from "../utils/vector-utils";
+import { rotateVectorAlongZ, rotateVectorAlongVector } from "../utils/vector-utils";
+import { Ponctual } from "../engine/models/ponctual";
 
 const constants = {
   lengthOfShortArm: 1.75,
@@ -111,8 +112,15 @@ var armProjectilePivot = new Pivot({
   object2Position: tipOfArm.subtract(projectile.position)
 });
 
+var projectileToGround = new Ponctual({
+  isAlongX: true,
+  name: "Projectile to ground",
+  object1: projectile,
+  object1Position: new Vector3(0, 0, 0)
+});
+
 var engine = new Engine({
-  constraints: [armPivot, armCounterweightPivot, armProjectilePivot],
+  constraints: [armPivot, armCounterweightPivot, armProjectilePivot, projectileToGround],
   gravity: 9.8,
   solids: [arm, counterweight, projectile],
   timeStep: 0.05,
@@ -124,6 +132,7 @@ engine.initialize();
 interface VizualizerState {
   showSpeeds: boolean;
   showAccelerations: boolean;
+  showForces: boolean;
   speed: number;
   stopAtAngle?: number;
 }
@@ -138,6 +147,7 @@ class Visualizer extends React.Component<{}, VizualizerState> {
     this.state = {
       showAccelerations: false,
       showSpeeds: true,
+      showForces: true,
       speed: 0.2
       // stopAtAngle: (45 * Math.PI) / 180
     };
@@ -198,7 +208,7 @@ class Visualizer extends React.Component<{}, VizualizerState> {
     }
   };
 
-  reset(){
+  reset() {
     engine.reset();
     this.forceUpdate();
   }
@@ -206,11 +216,26 @@ class Visualizer extends React.Component<{}, VizualizerState> {
   render() {
     return (
       <div>
-        <button className="btn btn-danger" onClick={() => this.reset()}>Reset</button>
-        <button className="btn btn-info" onClick={() => this.runOneStep()}>Next Step</button>
-        {!this.play ? <button className="btn btn-primary" onClick={() => this.run()}>Play</button> : <button className="btn btn-warning" onClick={() => (this.play = false)}>Stop</button>}
+        <button className="btn btn-danger" onClick={() => this.reset()}>
+          Reset
+        </button>
+        <button className="btn btn-info" onClick={() => this.runOneStep()}>
+          Next Step
+        </button>
+        {!this.play ? (
+          <button className="btn btn-primary" onClick={() => this.run()}>
+            Play
+          </button>
+        ) : (
+          <button className="btn btn-warning" onClick={() => (this.play = false)}>
+            Stop
+          </button>
+        )}
         <div>
-          <svg style={{width: '100vw', height:'calc(100vh - 50px)'}} viewBox={`${this.viewStart[0]} ${0} ${this.viewEnd[0] - this.viewStart[0]} ${this.viewEnd[1] - this.viewStart[1]}`}>
+          <svg
+            style={{ width: "100vw", height: "calc(100vh - 50px)" }}
+            viewBox={`${this.viewStart[0]} ${0} ${this.viewEnd[0] - this.viewStart[0]} ${this.viewEnd[1] - this.viewStart[1]}`}
+          >
             <text fontSize="0.04rem" x={0} y={1} textAnchor="start" fill="#ccc">
               Ellapsed {engine.time.toFixed(2)}s
             </text>
@@ -348,6 +373,23 @@ class Visualizer extends React.Component<{}, VizualizerState> {
                     x2={this.updatePointPositionToFitCanvas(speedEnd).x}
                     y2={this.updatePointPositionToFitCanvas(speedEnd).y}
                     stroke="#222299"
+                    strokeWidth="0.1"
+                  />
+                );
+              })}
+            {this.state.showForces &&
+              engine.constraints.map(c => {
+                const pos = c.object1.position.add(rotateVectorAlongVector(c.object1.rotation, c.object1Position));
+                const force = c.forceAppliedToFirstObject;
+                const forceEnds = pos.add(force.multiply(0.01));
+                return (
+                  <line
+                    key={c.name + "-force"}
+                    x1={this.updatePointPositionToFitCanvas(pos).x}
+                    y1={this.updatePointPositionToFitCanvas(pos).y}
+                    x2={this.updatePointPositionToFitCanvas(forceEnds).x}
+                    y2={this.updatePointPositionToFitCanvas(forceEnds).y}
+                    stroke="#cc22cc"
                     strokeWidth="0.1"
                   />
                 );
