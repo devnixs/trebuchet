@@ -1,6 +1,7 @@
 import { Matrix } from "mathjs";
 import { Solid } from "./solid";
 import { Vector3 } from "./vector3";
+import { rotateVectorAlongVector } from "../../utils/vector-utils";
 
 export interface ConstraintSettings {
   name: string;
@@ -21,6 +22,8 @@ export class Constraint {
   object2?: Solid;
   object2Position?: Vector3;
 
+  initialPosition: Vector3;
+
   constructor(settings: ConstraintSettings) {
     this.name = settings.name;
     this.object1 = settings.object1;
@@ -30,6 +33,8 @@ export class Constraint {
 
     this.forceAppliedToFirstObject = Vector3.zero();
     this.torqueAppliedToFirstObject = Vector3.zero();
+
+    this.initialPosition = this.object1.position.add(rotateVectorAlongVector(this.object1.rotation, this.object1Position));
   }
 
   toString() {

@@ -55,13 +55,6 @@ export class Engine {
 
   public initialize() {
     this.runChecks();
-    // inialise speeds
-    this.solids.forEach(s => (s.speed = Vector3.zero()));
-    this.solids.forEach(s => (s.rotation = Vector3.zero()));
-    this.solids.forEach(s => (s.rotationalSpeed = Vector3.zero()));
-
-    this.solids.forEach(s => (s.acceleration = Vector3.zero()));
-    this.solids.forEach(s => (s.rotationalAcceleration = Vector3.zero()));
 
     this.initialized = true;
   }
@@ -158,14 +151,14 @@ export class Engine {
               const GP = rotateVectorAlongVector(solid.rotation, c.object1Position);
               return {
                 unknownFactor: "yforce",
-                value: GP.x,
+                value: -GP.x,
                 element: c
               } as EquationTerm;
             } else {
               const GP = rotateVectorAlongVector(solid.rotation, c.object2Position);
               return {
                 unknownFactor: "yforce",
-                value: -GP.x,
+                value: GP.x,
                 element: c
               } as EquationTerm;
             }
@@ -259,7 +252,6 @@ export class Engine {
     let equations: Equation[] = [];
     equations = equations.concat(this.applySumOfForces());
     equations = equations.concat(this.applyDynamicMomentEquation());
-    // equations = equations.concat(this.addPivotRelationships1());
     equations = equations.concat(this.addPivotRelationships2());
 
     const solver = new Solver(equations);
@@ -284,6 +276,22 @@ export class Engine {
         if (solution.unknown === "yforce") {
           solution.element.forceAppliedToFirstObject.y = solution.value;
         }
+      }
+    }
+
+    // with time, a small bias may appear, we need to fix up the constraints
+
+    for (const constraint of this.constraints) {
+      const positionOfConstraintInObject1 = constraint.object1.position.add(rotateVectorAlongVector(constraint.object1.rotation, constraint.object1Position));
+
+      if (constraint.object2) {
+        const positionOfConstraintInObject2 = constraint.object2.position.add(rotateVectorAlongVector(constraint.object2.rotation, constraint.object2Position));
+        const difference = positionOfConstraintInObject2.subtract(positionOfConstraintInObject1);
+        constraint.object2.position = constraint.object2.position.subtract(difference);
+      } else {
+        // it is fixed to the ground
+        var difference = constraint.initialPosition.subtract(positionOfConstraintInObject1);
+        constraint.object1.position = constraint.object1.position.add(difference);
       }
     }
 

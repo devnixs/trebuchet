@@ -26,8 +26,7 @@ const constants = {
 };
 const counterWeightInertia = (2 / 5) * constants.counterWeightMass * Math.pow(constants.counterweightRadius, 2);
 
-const armInertia = MathJs.parse("armMass * ((lengthOfLongArm + lengthOfShortArm) ^ 2 + armWidth ^ 2) / 6");
-const armInertiaValue = armInertia.compile().evaluate(constants);
+const armInertiaValue = (constants.armMass * ((Math.pow(constants.lengthOfLongArm + constants.lengthOfShortArm, 2) + constants.armWidth) ^ 2)) / 6;
 
 var counterweight = new Solid({
   name: "Counterweight",
@@ -113,12 +112,23 @@ class Visualizer extends React.Component {
 
   async run() {
     this.play = true;
+    window.requestAnimationFrame(this.step);
+    /*     this.play = true;
     while (this.play) {
       engine.runOneStep();
       this.forceUpdate();
-      await new Promise(r => setTimeout(r, 100));
-    }
+      await new Promise(r => setTimeout(r, 10));
+    } */
   }
+
+  start = null;
+  step = () => {
+    engine.runOneStep();
+    this.forceUpdate();
+    if (this.play) {
+      window.requestAnimationFrame(this.step);
+    }
+  };
 
   runNTimes(n: number) {
     for (let i = 0; i < n; i++) {
@@ -139,22 +149,14 @@ class Visualizer extends React.Component {
   };
 
   render() {
-    console.log(engine);
-
     return (
       <div>
         <button onClick={() => this.runOneStep()}>Next Step</button>
         {!this.play ? <button onClick={() => this.run()}>Play</button> : <button onClick={() => (this.play = false)}>Stop</button>}
-        {<button onClick={() => this.runNTimes(55)}>Run 55 times</button>}
+        {/* {<button onClick={() => this.runNTimes(55)}>Run 55 times</button>} */}
         <div>
           <svg width="1000" height="300" viewBox="-20 0 40 15">
-            <text
-              fontSize="0.04rem"
-              x={0}
-              y={1}
-              textAnchor="start"
-              fill="#ccc"
-            >
+            <text fontSize="0.04rem" x={0} y={1} textAnchor="start" fill="#ccc">
               Ellapsed {engine.time}s
             </text>
             {engine.constraints.map(c => {
@@ -163,6 +165,16 @@ class Visualizer extends React.Component {
               const UIPos = this.updatePointPositionToFitCanvas(pos);
               return <circle key={c.name} cx={UIPos.x} cy={UIPos.y} r="0.3" fill="#009999" />;
             })}
+            {engine.constraints
+              .map(c => {
+                if (c.object2) {
+                  const posRelativeToObject = rotateVectorAlongZ(c.object2.rotation.z, c.object2Position);
+                  const pos = c.object2.position.add(posRelativeToObject);
+                  const UIPos = this.updatePointPositionToFitCanvas(pos);
+                  return <circle key={c.name} cx={UIPos.x} cy={UIPos.y} r="0.3" fill="#0044dd" />;
+                }
+              })
+              .filter(i => i)}
             <rect
               transform={`rotate(${-(arm.rotation.z + constants.initialAngle) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(arm.position).x}, ${
                 this.updatePointPositionToFitCanvas(arm.position).y
@@ -198,13 +210,13 @@ class Visualizer extends React.Component {
               </text>
             ))}
             {engine.solids.map(s => {
-              const speedEnd = s.position.add(s.speed.multiply(0.1));
+              const speedEnd = s.position.add(s.speed.multiply(0.3));
               return (
                 <line
                   key={s.name + "-speed"}
-                  x1={this.updatePointPositionToFitCanvas(s.position).x+0.1}
+                  x1={this.updatePointPositionToFitCanvas(s.position).x + 0.1}
                   y1={this.updatePointPositionToFitCanvas(s.position).y}
-                  x2={this.updatePointPositionToFitCanvas(speedEnd).x+0.1}
+                  x2={this.updatePointPositionToFitCanvas(speedEnd).x + 0.1}
                   y2={this.updatePointPositionToFitCanvas(speedEnd).y}
                   stroke="#992222"
                   strokeWidth="0.1"
@@ -212,7 +224,7 @@ class Visualizer extends React.Component {
               );
             })}
             {engine.solids.map(s => {
-              const speedEnd = s.position.add(s.acceleration.multiply(0.1));
+              const speedEnd = s.position.add(s.acceleration.multiply(0.2));
               return (
                 <line
                   key={s.name + "-acceleration"}
