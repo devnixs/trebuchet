@@ -90,12 +90,12 @@ var engine = new Engine({
 });
 
 engine.initialize();
-engine.runOneStep();
+//engine.runOneStep();
 
 class Visualizer extends React.Component {
   sub: number;
   componentDidMount() {
-    this.sub = setInterval(() => this.runOneStep(), 1000);
+    // this.sub = setInterval(() => this.runOneStep(), 1000);
   }
 
   componentWillUnmount() {
@@ -107,22 +107,67 @@ class Visualizer extends React.Component {
     this.forceUpdate();
   }
 
+  async runNTimes(n: number) {
+    for (let i = 0; i < n; i++) {
+      engine.runOneStep();
+      this.forceUpdate();
+      await new Promise(r => setTimeout(r, 0.1));
+    }
+  }
+
+  uiMultiplier = 1;
+
+  updatePointPositionToFitCanvas(pos: Vector3) {
+    return new Vector3(pos.x, 20 - pos.y, pos.z).multiply(this.uiMultiplier);
+  }
+
   render() {
+    console.log(engine);
+
+
     return (
-      <svg width="100" height="100">
-        {engine.solids.map(s => (
-          <rect transform={`rotate(${s.rotation.z * (180 / Math.PI)})`} x={s.position.x} y={-s.position.y} width={5} height={5} color="blue" />
-        ))}
-        {engine.constraints.map(c => (
-          <circle
-            x={c.object1.position.x + rotateVectorAlongZ(c.object1.rotation.z, c.object1Position).x}
-            y={c.object1.position.y + rotateVectorAlongZ(c.object1.rotation.z, c.object1Position).y}
-            width={5}
-            height={5}
-            color="red"
-          />
-        ))}
-      </svg>
+      <div>
+        <button onClick={() => this.runOneStep()}>Next Step</button>
+        <button onClick={() => this.runNTimes(5)}>Run 5 times</button>
+        <div>
+          <svg width="1000" height="500" viewBox="-20 0 40 20">
+            {engine.constraints.map(c => {
+              const posRelativeToObject = rotateVectorAlongZ(c.object1.rotation.z, c.object1Position);
+              const pos = c.object1.position.add(posRelativeToObject);
+              const UIPos = this.updatePointPositionToFitCanvas(pos);
+              return <circle key={c.name} cx={UIPos.x} cy={UIPos.y} r="0.3" fill="#009999" />;
+            })}
+            <rect
+              transform={`rotate(${-(arm.rotation.z + constants.initialAngle) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(arm.position).x}, ${this.updatePointPositionToFitCanvas(arm.position).y})`}
+              x={this.updatePointPositionToFitCanvas(arm.position).x - (constants.lengthOfLongArm + constants.lengthOfShortArm) / 2}
+              y={this.updatePointPositionToFitCanvas(arm.position).y - constants.armWidth / 2}
+              width={constants.lengthOfLongArm + constants.lengthOfShortArm}
+              height={constants.armWidth * this.uiMultiplier}
+              fill="#555"
+            />
+            <circle
+              transform={`rotate(${-(counterweight.rotation.z) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(counterweight.position).x}, ${this.updatePointPositionToFitCanvas(counterweight.position).y})`}
+              cx={this.updatePointPositionToFitCanvas(counterweight.position).x}
+              cy={this.updatePointPositionToFitCanvas(counterweight.position).y}
+              r={constants.counterweightRadius}
+              fill="#555"
+            />
+            {engine.solids.map(s => (
+              <text
+                font-size="0.04rem"
+                key={s.name + "text"}
+                transform={`rotate(${-(s.rotation.z) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(s.position).x}, ${this.updatePointPositionToFitCanvas(s.position).y})`}
+                x={this.updatePointPositionToFitCanvas(s.position).x}
+                y={this.updatePointPositionToFitCanvas(s.position).y}
+                textAnchor="middle"
+                fill="#ccc"
+              >
+                {s.name}
+              </text>
+            ))}
+          </svg>
+        </div>
+      </div>
     );
   }
 }

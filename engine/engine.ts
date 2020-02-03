@@ -384,14 +384,14 @@ export class Engine {
 
     // update speeds
     for (const solid of this.solids) {
-      solid.speed.add(solid.acceleration.multiply(this.timeStep));
-      solid.rotationalSpeed.add(solid.rotationalAcceleration.multiply(this.timeStep));
+      solid.speed = solid.speed.add(solid.acceleration.multiply(this.timeStep));
+      solid.rotationalSpeed = solid.rotationalSpeed.add(solid.rotationalAcceleration.multiply(this.timeStep));
     }
 
     // update positions
     for (const solid of this.solids) {
-      solid.position.add(solid.speed.multiply(this.timeStep));
-      solid.rotation.add(solid.rotationalSpeed.multiply(this.timeStep));
+      solid.position = solid.position.add(solid.speed.multiply(this.timeStep));
+      solid.rotation = solid.rotation.add(solid.rotationalSpeed.multiply(this.timeStep));
     }
 
     // update time
