@@ -39,11 +39,15 @@ export class Matrix33 {
     this.data[row][column] = value;
   }
 
-  multiply(other:  number) : Matrix33;
-  multiply(other:  Matrix33) : Matrix33;
-  multiply(other:  Vector3) : Vector3;
-  
-  multiply(other: Matrix33 | Vector3 | number) : Matrix33 | Vector3 {
+  clone() {
+    return new Matrix33([this.data[0].concat(), this.data[1].concat(), this.data[2].concat()]);
+  }
+
+  multiply(other: number): Matrix33;
+  multiply(other: Matrix33): Matrix33;
+  multiply(other: Vector3): Vector3;
+
+  multiply(other: Matrix33 | Vector3 | number): Matrix33 | Vector3 {
     if (other instanceof Matrix33) {
       const output = Matrix33.zero();
       for (let i = 0; i < this.height; i++) {

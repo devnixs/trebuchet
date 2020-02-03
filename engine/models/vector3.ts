@@ -33,6 +33,10 @@ export class Vector3 {
     return Math.sqrt(this.dot(this));
   }
 
+  clone(){
+    return new Vector3(this.x, this.y, this.z);
+  }
+
   angle() {
     if (this.x === 0) {
       return Math.PI / 2;

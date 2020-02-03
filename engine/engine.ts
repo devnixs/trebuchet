@@ -35,6 +35,10 @@ export class Engine {
     this.energyDissipationCoefficient = settings.energyDissipationCoefficient;
   }
 
+  reset() {
+    this.solids.forEach(i => i.reset());
+  }
+
   getSolutionIndex(element: Solid | Constraint, type: "d²x/dt" | "d²y/dt" | "d²w/dt" | "xforce" | "yforce") {
     if (element instanceof Solid) {
       if (type === "d²x/dt") {

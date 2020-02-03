@@ -11,7 +11,7 @@ interface SolidSettings {
 }
 
 export class Solid {
-  constructor(settings: SolidSettings) {
+  constructor(private settings: SolidSettings) {
     this.rotation = Vector3.zero();
     this.rotationalSpeed = Vector3.zero();
     this.speed = Vector3.zero();
@@ -34,6 +34,17 @@ export class Solid {
 
   acceleration: Vector3;
   rotationalAcceleration: Vector3;
+
+  reset() {
+    this.rotation = Vector3.zero();
+    this.rotationalSpeed = Vector3.zero();
+    this.speed = Vector3.zero();
+    this.acceleration = Vector3.zero();
+    this.rotationalAcceleration = Vector3.zero();
+
+    this.position = this.settings.initialPosition.clone();
+    this.inertia = this.settings.inertia.clone();
+  }
 
   toString() {
     return this.name;
