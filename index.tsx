@@ -20,7 +20,7 @@ const constants = {
   counterWeightLength: 2,
   armMass: 10,
   armWidth: 0.3,
-  projectileMass: 0.15,
+  projectileMass: 0.149,
   projectileRadius: 0.04,
   slingLength: 6.8
 };
@@ -115,15 +115,37 @@ var engine = new Engine({
   constraints: [armPivot, armCounterweightPivot, armProjectilePivot],
   gravity: 9.8,
   solids: [arm, counterweight, projectile],
-  timeStep: 0.01
+  timeStep: 0.01,
+  energyDissipationCoefficient: 0.05
 });
 
 engine.initialize();
 //engine.runOneStep();
 
-class Visualizer extends React.Component {
+interface VizualizerState {
+  showSpeeds: boolean;
+  showAccelerations: boolean;
+  speed: number;
+  stopAtAngle?: number;
+}
+
+class Visualizer extends React.Component<{}, VizualizerState> {
   sub: number;
   play: boolean;
+
+  constructor(props) {
+    super(props);
+    this.state = {
+      showAccelerations: false,
+      showSpeeds: true,
+      speed: 1,
+     // stopAtAngle: (45 * Math.PI) / 180
+    };
+  }
+
+  viewStart = [-20, -5];
+  viewEnd = [20, 30];
+
   componentDidMount() {
     // this.sub = setInterval(() => this.runOneStep(), 1000);
     document.onkeyup = this.onKeyUp;
@@ -145,13 +167,15 @@ class Visualizer extends React.Component {
     window.requestAnimationFrame(this.step);
   }
 
-  start = null;
+  start: Date | null = null;
   step = () => {
-    engine.runOneStep();
+    const ellapsed = this.start ? new Date().getTime() - this.start.getTime() : undefined;
+    this.start = new Date();
+    engine.runOneStep((this.state.speed * ellapsed) / 1000);
 
-    if (this.stopAngle) {
+    if (this.state.stopAtAngle) {
       const angle = projectile.speed.angle();
-      if (angle < this.stopAngle) {
+      if (angle < this.state.stopAtAngle) {
         this.play = false;
       }
     }
@@ -172,10 +196,6 @@ class Visualizer extends React.Component {
       this.forceUpdate();
     }
   };
-
-  stopAngle = (45 * Math.PI) / 180;
-  viewStart = [-20, -5];
-  viewEnd = [20, 30];
 
   render() {
     return (
@@ -201,16 +221,6 @@ class Visualizer extends React.Component {
               const UIPos = this.updatePointPositionToFitCanvas(pos);
               return <circle key={c.name} cx={UIPos.x} cy={UIPos.y} r="0.3" fill="#009999" />;
             })}
-            {engine.constraints
-              .map(c => {
-                if (c.object2) {
-                  const posRelativeToObject = rotateVectorAlongZ(c.object2.rotation.z, c.object2Position);
-                  const pos = c.object2.position.add(posRelativeToObject);
-                  const UIPos = this.updatePointPositionToFitCanvas(pos);
-                  return <circle key={c.name} cx={UIPos.x} cy={UIPos.y} r="0.3" fill="#0044dd" />;
-                }
-              })
-              .filter(i => i)}
             <rect
               transform={`rotate(${-(arm.rotation.z + constants.initialAngle) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(arm.position).x}, ${
                 this.updatePointPositionToFitCanvas(arm.position).y
@@ -229,6 +239,52 @@ class Visualizer extends React.Component {
               cy={this.updatePointPositionToFitCanvas(counterweight.position).y}
               r={constants.counterweightRadius}
               fill="#555"
+            />
+            <line
+              x1={this.updatePointPositionToFitCanvas(projectile.position).x}
+              y1={this.updatePointPositionToFitCanvas(projectile.position).y}
+              x2={
+                this.updatePointPositionToFitCanvas(
+                  rotateVectorAlongZ(armProjectilePivot.object1.rotation.z, armProjectilePivot.object1Position).add(armProjectilePivot.object1.position)
+                ).x
+              }
+              y2={
+                this.updatePointPositionToFitCanvas(
+                  rotateVectorAlongZ(armProjectilePivot.object1.rotation.z, armProjectilePivot.object1Position).add(armProjectilePivot.object1.position)
+                ).y
+              }
+              stroke="#222"
+              strokeWidth="0.2"
+            />
+            <line
+              x1={this.updatePointPositionToFitCanvas(new Vector3(0, 0, 0)).x}
+              y1={this.updatePointPositionToFitCanvas(new Vector3(0, 0, 0)).y}
+              x2={this.updatePointPositionToFitCanvas(new Vector3(0, 0, 0)).x}
+              y2={
+                this.updatePointPositionToFitCanvas(rotateVectorAlongZ(armPivot.object1.rotation.z, armPivot.object1Position).add(armPivot.object1.position)).y
+              }
+              stroke="#009999"
+              strokeWidth="0.2"
+            />
+            <line
+              x1={this.updatePointPositionToFitCanvas(counterweight.position).x}
+              y1={this.updatePointPositionToFitCanvas(counterweight.position).y}
+              x2={
+                this.updatePointPositionToFitCanvas(
+                  rotateVectorAlongZ(armCounterweightPivot.object1.rotation.z, armCounterweightPivot.object1Position).add(
+                    armCounterweightPivot.object1.position
+                  )
+                ).x
+              }
+              y2={
+                this.updatePointPositionToFitCanvas(
+                  rotateVectorAlongZ(armCounterweightPivot.object1.rotation.z, armCounterweightPivot.object1Position).add(
+                    armCounterweightPivot.object1.position
+                  )
+                ).y
+              }
+              stroke="#222"
+              strokeWidth="0.2"
             />
             <circle
               transform={`rotate(${-projectile.rotation.z * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(projectile.position).x}, ${
@@ -254,34 +310,36 @@ class Visualizer extends React.Component {
                 {s.name}
               </text>
             ))}
-            {engine.solids.map(s => {
-              const speedEnd = s.position.add(s.speed.multiply(0.3));
-              return (
-                <line
-                  key={s.name + "-speed"}
-                  x1={this.updatePointPositionToFitCanvas(s.position).x + 0.1}
-                  y1={this.updatePointPositionToFitCanvas(s.position).y}
-                  x2={this.updatePointPositionToFitCanvas(speedEnd).x + 0.1}
-                  y2={this.updatePointPositionToFitCanvas(speedEnd).y}
-                  stroke="#992222"
-                  strokeWidth="0.1"
-                />
-              );
-            })}
-            {engine.solids.map(s => {
-              const speedEnd = s.position.add(s.acceleration.multiply(0.2));
-              return (
-                <line
-                  key={s.name + "-acceleration"}
-                  x1={this.updatePointPositionToFitCanvas(s.position).x}
-                  y1={this.updatePointPositionToFitCanvas(s.position).y}
-                  x2={this.updatePointPositionToFitCanvas(speedEnd).x}
-                  y2={this.updatePointPositionToFitCanvas(speedEnd).y}
-                  stroke="#222299"
-                  strokeWidth="0.1"
-                />
-              );
-            })}
+            {this.state.showSpeeds &&
+              engine.solids.map(s => {
+                const speedEnd = s.position.add(s.speed.multiply(0.3));
+                return (
+                  <line
+                    key={s.name + "-speed"}
+                    x1={this.updatePointPositionToFitCanvas(s.position).x + 0.1}
+                    y1={this.updatePointPositionToFitCanvas(s.position).y}
+                    x2={this.updatePointPositionToFitCanvas(speedEnd).x + 0.1}
+                    y2={this.updatePointPositionToFitCanvas(speedEnd).y}
+                    stroke="#992222"
+                    strokeWidth="0.1"
+                  />
+                );
+              })}
+            {this.state.showAccelerations &&
+              engine.solids.map(s => {
+                const speedEnd = s.position.add(s.acceleration.multiply(0.2));
+                return (
+                  <line
+                    key={s.name + "-acceleration"}
+                    x1={this.updatePointPositionToFitCanvas(s.position).x}
+                    y1={this.updatePointPositionToFitCanvas(s.position).y}
+                    x2={this.updatePointPositionToFitCanvas(speedEnd).x}
+                    y2={this.updatePointPositionToFitCanvas(speedEnd).y}
+                    stroke="#222299"
+                    strokeWidth="0.1"
+                  />
+                );
+              })}
           </svg>
         </div>
       </div>

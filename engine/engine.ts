@@ -15,20 +15,24 @@ interface EngineSettings {
 
   timeStep: number;
   gravity: number;
+
+  energyDissipationCoefficient: number;
 }
 
 export class Engine {
   solids: Solid[];
   constraints: Constraint[];
-  timeStep: number;
+  maxTimeStep: number;
   gravity: number;
   initialized: boolean;
   time = 0;
+  energyDissipationCoefficient: number;
   constructor(settings: EngineSettings) {
     this.solids = settings.solids;
     this.constraints = settings.constraints;
-    this.timeStep = settings.timeStep;
+    this.maxTimeStep = settings.timeStep;
     this.gravity = settings.gravity;
+    this.energyDissipationCoefficient = settings.energyDissipationCoefficient;
   }
 
   getSolutionIndex(element: Solid | Constraint, type: "d²x/dt" | "d²y/dt" | "d²w/dt" | "xforce" | "yforce") {
@@ -241,9 +245,12 @@ export class Engine {
     // TODO: ensure names of solids and constraints are unique
   }
 
-  public runOneStep() {
+  public runOneStep(duration?: number) {
     if (!this.initialized) {
       throw new Error("Please call .initialize() first");
+    }
+    if (!duration || duration < 0 || duration > this.maxTimeStep) {
+      duration = this.maxTimeStep;
     }
 
     // We're looking for 2 linear acceleration and 1 angular acceleration for each solid
@@ -297,17 +304,19 @@ export class Engine {
 
     // update speeds
     for (const solid of this.solids) {
-      solid.speed = solid.speed.add(solid.acceleration.multiply(this.timeStep));
-      solid.rotationalSpeed = solid.rotationalSpeed.add(solid.rotationalAcceleration.multiply(this.timeStep));
+      solid.speed = solid.speed.add(solid.acceleration.multiply(duration)).multiply(1 - this.energyDissipationCoefficient * duration);
+      solid.rotationalSpeed = solid.rotationalSpeed
+        .add(solid.rotationalAcceleration.multiply(duration))
+        .multiply(1 - this.energyDissipationCoefficient * duration);
     }
 
     // update positions
     for (const solid of this.solids) {
-      solid.position = solid.position.add(solid.speed.multiply(this.timeStep));
-      solid.rotation = solid.rotation.add(solid.rotationalSpeed.multiply(this.timeStep));
+      solid.position = solid.position.add(solid.speed.multiply(duration));
+      solid.rotation = solid.rotation.add(solid.rotationalSpeed.multiply(duration));
     }
 
     // update time
-    this.time += this.timeStep;
+    this.time += duration;
   }
 }
