@@ -7,6 +7,7 @@ import { EquationTerm, Equation } from "./models/equation";
 import { ChainOfSolid } from "./models/chain-of-solid";
 import { Vector3 } from "./models/vector3";
 import { Matrix33 } from "./models/matrix33";
+import { Solver } from "./models/solver";
 
 interface EngineSettings {
   solids: Solid[];
@@ -22,6 +23,7 @@ export class Engine {
   timeStep: number;
   gravity: number;
   initialized: boolean;
+  time = 0;
   constructor(settings: EngineSettings) {
     this.solids = settings.solids;
     this.constraints = settings.constraints;
@@ -58,6 +60,9 @@ export class Engine {
     this.solids.forEach(s => (s.rotation = Vector3.zero()));
     this.solids.forEach(s => (s.rotationalSpeed = Vector3.zero()));
 
+    this.solids.forEach(s => (s.acceleration = Vector3.zero()));
+    this.solids.forEach(s => (s.rotationalAcceleration = Vector3.zero()));
+
     this.initialized = true;
   }
 
@@ -84,7 +89,7 @@ export class Engine {
             c =>
               ({
                 unknownFactor: "xforce",
-                value: c.object1 === solid ? 1 : -1,
+                value: c.object1 === solid ? -1 : 1,
                 element: c
               } as EquationTerm)
           )
@@ -94,7 +99,7 @@ export class Engine {
       equations.push({
         terms: [
           {
-            value: solid.mass * this.gravity,
+            value: - solid.mass * this.gravity,
             element: null,
             unknownFactor: "none"
           },
@@ -107,7 +112,7 @@ export class Engine {
             c =>
               ({
                 unknownFactor: "yforce",
-                value: c.object1 === solid ? 1 : -1,
+                value: c.object1 === solid ? -1 : 1,
                 element: c
               } as EquationTerm)
           )
@@ -167,8 +172,8 @@ export class Engine {
           })
         ]
       });
-      return equations;
     }
+    return equations;
   }
 
   private getPointSpeedInSolid(chain: ChainOfSolid, point: Vector3): Vector3 {
@@ -303,7 +308,7 @@ export class Engine {
     equations.push({ terms: yTerms });
 
     const getParentsConstraints: (a: ChainOfSolid) => Constraint[] = (a: ChainOfSolid) =>
-      a.parentConstraint ? [a.parentConstraint, ...getParentsConstraints(a.parent)] : [a.parentConstraint];
+      a.parent ? [a.parentConstraint, ...getParentsConstraints(a.parent)] : [a.parentConstraint];
     const allParents = getParentsConstraints(chain);
 
     const children = this.constraints.filter(i => (i.object1 === chain.element || i.object2 === chain.element) && !allParents.find(parent => parent === i));
@@ -351,5 +356,45 @@ export class Engine {
     equations = equations.concat(this.applySumOfForces());
     equations = equations.concat(this.applyDynamicMomentEquation());
     equations = equations.concat(this.addPivotRelationships());
+
+    const solver = new Solver(equations);
+    const solutions = solver.solve();
+
+    for (const solution of solutions) {
+      if (solution.element instanceof Solid) {
+        if (solution.unknown === "d²x/dt") {
+          solution.element.acceleration.x = solution.value;
+        }
+        if (solution.unknown === "d²y/dt") {
+          solution.element.acceleration.y = solution.value;
+        }
+        if (solution.unknown === "d²w/dt") {
+          solution.element.rotationalAcceleration.z = solution.value;
+        }
+      }
+      if (solution.element instanceof Constraint) {
+        if (solution.unknown === "xforce") {
+          solution.element.forceAppliedToFirstObject.x = solution.value;
+        }
+        if (solution.unknown === "yforce") {
+          solution.element.forceAppliedToFirstObject.y = solution.value;
+        }
+      }
+    }
+
+    // update speeds
+    for (const solid of this.solids) {
+      solid.speed.add(solid.acceleration.multiply(this.timeStep));
+      solid.rotationalSpeed.add(solid.rotationalAcceleration.multiply(this.timeStep));
+    }
+
+    // update positions
+    for (const solid of this.solids) {
+      solid.position.add(solid.speed.multiply(this.timeStep));
+      solid.rotation.add(solid.rotationalSpeed.multiply(this.timeStep));
+    }
+
+    // update time
+    this.time += this.timeStep;
   }
 }

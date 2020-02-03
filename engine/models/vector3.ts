@@ -2,7 +2,7 @@ export class Vector3 {
   constructor(public x: number, public y: number, public z: number) {}
 
   dot(other: Vector3) {
-    return other.x * this.x + other.y + this.y + other.z + this.z;
+    return other.x * this.x + other.y * this.y + other.z * this.z;
   }
 
   cross(other: Vector3) {
@@ -23,6 +23,10 @@ export class Vector3 {
 
   subtract(other: Vector3) {
     return new Vector3(this.x - other.x, this.y - other.y, this.z - other.z);
+  }
+
+  multiply(other: number) {
+    return new Vector3(this.x * other, this.y * other, this.z * other);
   }
 
   toString() {

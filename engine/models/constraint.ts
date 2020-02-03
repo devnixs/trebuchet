@@ -27,6 +27,9 @@ export class Constraint {
     this.object2 = settings.object2;
     this.object1Position = settings.object1Position;
     this.object2Position = settings.object2Position;
+
+    this.forceAppliedToFirstObject = Vector3.zero();
+    this.torqueAppliedToFirstObject = Vector3.zero();
   }
 
   toString() {
