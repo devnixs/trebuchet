@@ -29,6 +29,22 @@ export class Vector3 {
     return new Vector3(this.x * other, this.y * other, this.z * other);
   }
 
+  norm() {
+    return Math.sqrt(this.dot(this));
+  }
+
+  angle() {
+    if (this.x === 0) {
+      return Math.PI / 2;
+    } else {
+      if (this.y > 0) {
+        return Math.acos(this.x / this.norm());
+      } else {
+        return 2 * Math.PI - Math.acos(this.x / this.norm());
+      }
+    }
+  }
+
   toString() {
     return `${this.x}, ${this.y}, ${this.z}`;
   }

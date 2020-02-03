@@ -1,17 +1,14 @@
-import * as React from "react";
-import * as ReactDOM from "react-dom";
+import "@fortawesome/fontawesome-free/css/all.css";
 import "bootstrap";
 import "bootstrap/dist/css/bootstrap.css"; // Import precompiled Bootstrap css
-import "@fortawesome/fontawesome-free/css/all.css";
-import { Solid } from "./engine/models/solid";
-import { matrix, add, Matrix } from "mathjs";
-import * as MathJs from "mathjs";
-import { Pivot } from "./engine/models/pivot";
-import { Matrix33 } from "./engine/models/matrix33";
-import { Vector3 } from "./engine/models/vector3";
+import * as React from "react";
+import * as ReactDOM from "react-dom";
 import { Engine } from "./engine/engine";
-import { Solver } from "./engine/models/solver";
-import { rotateVector, rotateVectorAlongZ } from "./utils/vector-utils";
+import { Matrix33 } from "./engine/models/matrix33";
+import { Pivot } from "./engine/models/pivot";
+import { Solid } from "./engine/models/solid";
+import { Vector3 } from "./engine/models/vector3";
+import { rotateVectorAlongZ } from "./utils/vector-utils";
 
 const constants = {
   lengthOfShortArm: 1.75,
@@ -22,9 +19,13 @@ const constants = {
   counterweightRadius: 0.5,
   counterWeightLength: 2,
   armMass: 10,
-  armWidth: 0.3
+  armWidth: 0.3,
+  projectileMass: 0.15,
+  projectileRadius: 0.04,
+  slingLength: 6.8
 };
 const counterWeightInertia = (2 / 5) * constants.counterWeightMass * Math.pow(constants.counterweightRadius, 2);
+const projectileInertia = (2 / 5) * constants.projectileMass * Math.pow(constants.projectileRadius, 2);
 
 const armInertiaValue = (constants.armMass * ((Math.pow(constants.lengthOfLongArm + constants.lengthOfShortArm, 2) + constants.armWidth) ^ 2)) / 6;
 
@@ -59,6 +60,23 @@ var arm = new Solid({
   mass: constants.armMass
 });
 
+const tipOfArm = new Vector3(
+  -constants.lengthOfLongArm * Math.cos(constants.initialAngle),
+  -constants.lengthOfLongArm * Math.cos(constants.initialAngle) + constants.heightOfPivot,
+  0
+);
+
+var projectile = new Solid({
+  name: "Projectile",
+  initialPosition: new Vector3(Math.sqrt(Math.pow(constants.slingLength, 2) - Math.pow(tipOfArm.y, 2)), 0, 0),
+  inertia: new Matrix33([
+    [projectileInertia, 0, 0],
+    [0, projectileInertia, 0],
+    [0, 0, projectileInertia]
+  ]),
+  mass: constants.projectileMass
+});
+
 var armPivot = new Pivot({
   name: "Arm to floor pivot",
   object1: arm,
@@ -81,10 +99,22 @@ var armCounterweightPivot = new Pivot({
   object2Position: new Vector3(0, constants.counterWeightLength, 0)
 });
 
+var armProjectilePivot = new Pivot({
+  name: "Arm to projectile pivot",
+  object1: arm,
+  object1Position: new Vector3(
+    -((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2) * Math.cos(constants.initialAngle),
+    -((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2) * Math.sin(constants.initialAngle),
+    0
+  ),
+  object2: projectile,
+  object2Position: tipOfArm.subtract(projectile.position)
+});
+
 var engine = new Engine({
-  constraints: [armPivot, armCounterweightPivot],
+  constraints: [armPivot, armCounterweightPivot, armProjectilePivot],
   gravity: 9.8,
-  solids: [arm, counterweight],
+  solids: [arm, counterweight, projectile],
   timeStep: 0.01
 });
 
@@ -113,32 +143,27 @@ class Visualizer extends React.Component {
   async run() {
     this.play = true;
     window.requestAnimationFrame(this.step);
-    /*     this.play = true;
-    while (this.play) {
-      engine.runOneStep();
-      this.forceUpdate();
-      await new Promise(r => setTimeout(r, 10));
-    } */
   }
 
   start = null;
   step = () => {
     engine.runOneStep();
+
+    if (this.stopAngle) {
+      const angle = projectile.speed.angle();
+      if (angle < this.stopAngle) {
+        this.play = false;
+      }
+    }
     this.forceUpdate();
+
     if (this.play) {
       window.requestAnimationFrame(this.step);
     }
   };
 
-  runNTimes(n: number) {
-    for (let i = 0; i < n; i++) {
-      engine.runOneStep();
-    }
-    this.forceUpdate();
-  }
-
   updatePointPositionToFitCanvas(pos: Vector3) {
-    return new Vector3(pos.x, 15 - pos.y, pos.z);
+    return new Vector3(pos.x, this.viewEnd[1] - pos.y, pos.z);
   }
 
   onKeyUp = (e: KeyboardEvent) => {
@@ -148,17 +173,28 @@ class Visualizer extends React.Component {
     }
   };
 
+  stopAngle = (45 * Math.PI) / 180;
+  viewStart = [-20, -5];
+  viewEnd = [20, 30];
+
   render() {
     return (
       <div>
         <button onClick={() => this.runOneStep()}>Next Step</button>
         {!this.play ? <button onClick={() => this.run()}>Play</button> : <button onClick={() => (this.play = false)}>Stop</button>}
-        {/* {<button onClick={() => this.runNTimes(55)}>Run 55 times</button>} */}
         <div>
-          <svg width="1000" height="300" viewBox="-20 0 40 15">
+          <svg width="1200" height="800" viewBox={`${this.viewStart[0]} ${0} ${this.viewEnd[0] - this.viewStart[0]} ${this.viewEnd[1] - this.viewStart[1]}`}>
             <text fontSize="0.04rem" x={0} y={1} textAnchor="start" fill="#ccc">
-              Ellapsed {engine.time}s
+              Ellapsed {engine.time.toFixed(2)}s
             </text>
+            <text fontSize="0.04rem" x={0} y={2} textAnchor="start" fill="#ccc">
+              Projectile Velocity {projectile.speed.norm().toFixed(2)}m/s
+            </text>
+            {projectile.speed.norm() > 0 && (
+              <text fontSize="0.04rem" x={0} y={3} textAnchor="start" fill="#ccc">
+                Projectile Angle {((projectile.speed.angle() * 180) / Math.PI).toFixed(2)} °
+              </text>
+            )}
             {engine.constraints.map(c => {
               const posRelativeToObject = rotateVectorAlongZ(c.object1.rotation.z, c.object1Position);
               const pos = c.object1.position.add(posRelativeToObject);
@@ -193,6 +229,15 @@ class Visualizer extends React.Component {
               cy={this.updatePointPositionToFitCanvas(counterweight.position).y}
               r={constants.counterweightRadius}
               fill="#555"
+            />
+            <circle
+              transform={`rotate(${-projectile.rotation.z * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(projectile.position).x}, ${
+                this.updatePointPositionToFitCanvas(projectile.position).y
+              })`}
+              cx={this.updatePointPositionToFitCanvas(projectile.position).x}
+              cy={this.updatePointPositionToFitCanvas(projectile.position).y}
+              r={constants.projectileRadius * 5}
+              fill="#FFF"
             />
             {engine.solids.map(s => (
               <text
