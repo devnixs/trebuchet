@@ -2,145 +2,43 @@ import "@fortawesome/fontawesome-free/css/all.css";
 import "bootstrap";
 import "bootstrap/dist/css/bootstrap.css"; // Import precompiled Bootstrap css
 import * as React from "react";
-import * as ReactDOM from "react-dom";
 import { Engine } from "../engine/engine";
-import { Matrix33 } from "../engine/models/matrix33";
-import { Pivot } from "../engine/models/pivot";
-import { Solid } from "../engine/models/solid";
 import { Vector3 } from "../engine/models/vector3";
-import { rotateVectorAlongZ, rotateVectorAlongVector } from "../utils/vector-utils";
-import { Slider } from "../engine/models/slider";
+import { rotateVectorAlongVector, rotateVectorAlongZ } from "../utils/vector-utils";
+import { getTrebuchetObjects, TrebuchetObjects } from "./trebuchet-objects";
+import lodash from "lodash";
 
 const constants = {
   lengthOfShortArm: 1.75,
-  lengthOfLongArm: 6.79,
+  lengthOfLongArm: 6.792,
   initialAngle: Math.PI / 4,
   heightOfPivot: 5,
   counterWeightMass: 98,
-  counterweightRadius: 0.5,
+  counterweightRadius: 0.16,
   counterWeightLength: 2,
   armMass: 10.65,
-  armWidth: 0.3,
-  projectileMass: 4,
+  armWidth: 0.2,
+  projectileMass: 0.149,
   projectileRadius: 0.076,
-  slingLength: 6.8
+  slingLength: 6.79
 };
-const counterWeightInertia = (2 / 5) * constants.counterWeightMass * Math.pow(constants.counterweightRadius, 2);
-const projectileInertia = (2 / 5) * constants.projectileMass * Math.pow(constants.projectileRadius, 2);
-
-const armInertiaValue = (constants.armMass * ((Math.pow(constants.lengthOfLongArm + constants.lengthOfShortArm, 2) + constants.armWidth) ^ 2)) / 6;
-
-var counterweight = new Solid({
-  name: "Counterweight",
-  initialPosition: new Vector3(0, constants.heightOfPivot, 0)
-    .add(new Vector3(constants.lengthOfShortArm * Math.cos(constants.initialAngle), constants.lengthOfShortArm * Math.sin(constants.initialAngle), 0))
-    .add(new Vector3(0, -constants.counterWeightLength, 0)),
-
-  inertia: new Matrix33([
-    [counterWeightInertia, 0, 0],
-    [0, counterWeightInertia, 0],
-    [0, 0, counterWeightInertia]
-  ]),
-  mass: constants.counterWeightMass
-});
-
-var arm = new Solid({
-  name: "Arm",
-  initialPosition: new Vector3(0, constants.heightOfPivot, 0).add(
-    new Vector3(
-      -((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2 - constants.lengthOfShortArm) * Math.cos(constants.initialAngle),
-      -((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2 - constants.lengthOfShortArm) * Math.sin(constants.initialAngle),
-      0
-    )
-  ),
-  inertia: new Matrix33([
-    [armInertiaValue, 0, 0],
-    [0, armInertiaValue, 0],
-    [0, 0, armInertiaValue]
-  ]),
-  mass: constants.armMass
-});
-
-const tipOfArm = new Vector3(
-  -constants.lengthOfLongArm * Math.cos(constants.initialAngle),
-  -constants.lengthOfLongArm * Math.cos(constants.initialAngle) + constants.heightOfPivot,
-  0
-);
-
-var projectile = new Solid({
-  name: "Projectile",
-  initialPosition: new Vector3(Math.sqrt(Math.pow(constants.slingLength, 2) - Math.pow(tipOfArm.y, 2)), 0, 0),
-  inertia: new Matrix33([
-    [projectileInertia, 0, 0],
-    [0, projectileInertia, 0],
-    [0, 0, projectileInertia]
-  ]),
-  mass: constants.projectileMass
-});
-
-var armPivot = new Pivot({
-  name: "Arm to floor pivot",
-  object1: arm,
-  object1Position: new Vector3(
-    ((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2 - constants.lengthOfShortArm) * Math.cos(constants.initialAngle),
-    ((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2 - constants.lengthOfShortArm) * Math.sin(constants.initialAngle),
-    0
-  )
-});
-
-var armCounterweightPivot = new Pivot({
-  name: "Arm to counterweight pivot",
-  object1: arm,
-  object1Position: new Vector3(
-    ((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2) * Math.cos(constants.initialAngle),
-    ((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2) * Math.sin(constants.initialAngle),
-    0
-  ),
-  object2: counterweight,
-  object2Position: new Vector3(0, constants.counterWeightLength, 0)
-});
-
-var armProjectilePivot = new Pivot({
-  name: "Arm to projectile pivot",
-  object1: arm,
-  object1Position: new Vector3(
-    -((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2) * Math.cos(constants.initialAngle),
-    -((constants.lengthOfLongArm + constants.lengthOfShortArm) / 2) * Math.sin(constants.initialAngle),
-    0
-  ),
-  object2: projectile,
-  object2Position: tipOfArm.subtract(projectile.position)
-});
- 
-var projectileToGround = new Slider({
-  name: "Projectile to ground",
-  object1: projectile,
-  object1Position: new Vector3(0, 0, 0),
-  axisInrelationToObject2: new Vector3(1,-0.2, 0)
-}); 
-
-var engine = new Engine({
-  constraints: [armPivot, armCounterweightPivot, armProjectilePivot, projectileToGround],
-  gravity: 9.8,
-  solids: [arm, counterweight, projectile],
-  timeStep: 0.05,
-  energyDissipationCoefficient: 0 // 0.05
-});
-
-engine.initialize();
 
 interface VizualizerState {
   showSpeeds: boolean;
   showAccelerations: boolean;
   showForces: boolean;
   speed: number;
-  stopAtAngle?: number;
+  releaseAngle?: number;
 }
 
 class Visualizer extends React.Component<{}, VizualizerState> {
   sub: number;
   play: boolean;
   fps: number;
+  engine: Engine;
+  objects: TrebuchetObjects;
+  detached: boolean;
+  releaseVelocity?: number;
 
   constructor(props) {
     super(props);
@@ -148,16 +46,43 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       showAccelerations: false,
       showSpeeds: true,
       showForces: false,
-      speed: 0.2
-      // stopAtAngle: (45 * Math.PI) / 180
+      speed: 1,
+      releaseAngle: (45 * Math.PI) / 180
     };
+
+    this.setup();
   }
 
-  viewStart = [-20, -5];
+  viewStart = [-10, -5];
   viewEnd = [20, 30];
 
+  setup() {
+    this.detached = false;
+    this.releaseVelocity = undefined;
+
+    this.objects = getTrebuchetObjects(constants);
+    this.engine = new Engine({
+      constraints: [this.objects.armPivot, this.objects.armCounterweightPivot, this.objects.armProjectilePivot, this.objects.projectileToGround],
+      gravity: 9.8,
+      solids: [this.objects.arm, this.objects.counterweight, this.objects.projectile],
+      timeStep: 0.02,
+      energyDissipationCoefficient: 0 // 0.05
+    });
+    this.engine.initialize();
+    this.engine.runOneStep({ dryRun: true });
+  }
+
+  computeViewBox() {
+    const minX = lodash.min(this.engine.solids.map(i => i.position.x).concat(5));
+    const minY = lodash.min(this.engine.solids.map(i => i.position.y).concat(5));
+    const maxX = lodash.max(this.engine.solids.map(i => i.position.x).concat(10));
+    const maxY = lodash.max(this.engine.solids.map(i => i.position.y).concat(20));
+
+    this.viewStart = [minX - 10, minY - 10];
+    this.viewEnd = [maxX + 10, maxY + 10];
+  }
+
   componentDidMount() {
-    // this.sub = setInterval(() => this.runOneStep(), 1000);
     document.onkeyup = this.onKeyUp;
   }
 
@@ -168,26 +93,35 @@ class Visualizer extends React.Component<{}, VizualizerState> {
   }
 
   runOneStep() {
-    engine.runOneStep();
+    this.engine.runOneStep({});
     this.forceUpdate();
   }
 
   async run() {
     this.play = true;
+    this.start = null;
     window.requestAnimationFrame(this.step);
   }
 
   start: Date | null = null;
   step = () => {
-    const ellapsed = this.start ? new Date().getTime() - this.start.getTime() : undefined;
+    const ellapsed = this.start ? new Date().getTime() - this.start.getTime() : 0.01;
     this.start = new Date();
     this.fps = 1000 / ellapsed;
-    engine.runOneStep((this.state.speed * ellapsed) / 1000);
+    this.engine.runOneStep({ duration: (this.state.speed * ellapsed) / 1000 });
 
-    if (this.state.stopAtAngle) {
-      const angle = projectile.speed.angle();
-      if (angle < this.state.stopAtAngle) {
+    // break the slider if the force becomes positive
+    if (this.objects.projectileToGround.forceAppliedToFirstObject.y <= 0) {
+      this.engine.removeConstraint(this.objects.projectileToGround);
+    }
+
+    if (this.state.releaseAngle && !this.detached) {
+      const angle = this.objects.projectile.speed.angle();
+      if (angle < this.state.releaseAngle) {
+        this.detached = true;
         this.play = false;
+        this.engine.removeConstraint(this.objects.armProjectilePivot);
+        this.releaseVelocity = this.objects.projectile.speed.norm();
       }
     }
     this.forceUpdate();
@@ -203,13 +137,14 @@ class Visualizer extends React.Component<{}, VizualizerState> {
 
   onKeyUp = (e: KeyboardEvent) => {
     if (e.which == 65) {
-      engine.runOneStep();
+      this.engine.runOneStep({});
       this.forceUpdate();
     }
   };
 
   reset() {
-    engine.reset();
+    this.play = false;
+    this.setup();
     this.forceUpdate();
   }
 
@@ -237,102 +172,150 @@ class Visualizer extends React.Component<{}, VizualizerState> {
             viewBox={`${this.viewStart[0]} ${0} ${this.viewEnd[0] - this.viewStart[0]} ${this.viewEnd[1] - this.viewStart[1]}`}
           >
             <text fontSize="0.04rem" x={0} y={1} textAnchor="start" fill="#ccc">
-              Ellapsed {engine.time.toFixed(2)}s
+              Ellapsed {this.engine.time.toFixed(2)}s
             </text>
             <text fontSize="0.04rem" x={0} y={2} textAnchor="start" fill="#ccc">
-              Projectile Velocity {projectile.speed.norm().toFixed(2)}m/s
+              Projectile Velocity {this.objects.projectile.speed.norm().toFixed(2)}m/s
             </text>
-            {projectile.speed.norm() > 0 && (
-              <text fontSize="0.04rem" x={-20} y={2} textAnchor="start" fill="#ccc">
-                Projectile Angle {((projectile.speed.angle() * 180) / Math.PI).toFixed(2)}°
+            {this.objects.projectile.speed.norm() > 0 && (
+              <text fontSize="0.04rem" x={-10} y={2} textAnchor="start" fill="#ccc">
+                Projectile Angle {((this.objects.projectile.speed.angle() * 180) / Math.PI).toFixed(2)}°
               </text>
             )}
             {this.fps > 0 && (
-              <text fontSize="0.04rem" x={-20} y={1} textAnchor="start" fill="#ccc">
+              <text fontSize="0.04rem" x={-10} y={1} textAnchor="start" fill="#ccc">
                 {Math.ceil(this.fps)} FPS
               </text>
             )}
-            {engine.constraints.map(c => {
+            {this.releaseVelocity ? (
+              <text fontSize="0.04rem" x={10} y={1.5} textAnchor="start" fontWeight="bold" fill="#fff">
+                Release Velocity : {this.releaseVelocity.toFixed(2)} m/s
+              </text>
+            ) : null}
+            {this.engine.constraints.map(c => {
               const posRelativeToObject = rotateVectorAlongZ(c.object1.rotation.z, c.object1Position);
               const pos = c.object1.position.add(posRelativeToObject);
               const UIPos = this.updatePointPositionToFitCanvas(pos);
-              return <circle key={c.name} cx={UIPos.x} cy={UIPos.y} r="0.3" fill="#009999" />;
+              return <circle key={c.name} cx={UIPos.x} cy={UIPos.y} r="0.1" fill="#009999" />;
             })}
+            {/* Arm */}
             <rect
-              transform={`rotate(${-(arm.rotation.z + constants.initialAngle) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(arm.position).x}, ${
-                this.updatePointPositionToFitCanvas(arm.position).y
-              })`}
-              x={this.updatePointPositionToFitCanvas(arm.position).x - (constants.lengthOfLongArm + constants.lengthOfShortArm) / 2}
-              y={this.updatePointPositionToFitCanvas(arm.position).y - constants.armWidth / 2}
+              transform={`rotate(${-(this.objects.arm.rotation.z + constants.initialAngle) * (180 / Math.PI)}, ${
+                this.updatePointPositionToFitCanvas(this.objects.arm.position).x
+              }, ${this.updatePointPositionToFitCanvas(this.objects.arm.position).y})`}
+              x={this.updatePointPositionToFitCanvas(this.objects.arm.position).x - (constants.lengthOfLongArm + constants.lengthOfShortArm) / 2}
+              y={this.updatePointPositionToFitCanvas(this.objects.arm.position).y - constants.armWidth / 2}
               width={constants.lengthOfLongArm + constants.lengthOfShortArm}
               height={constants.armWidth}
               fill="#555"
             />
-            <circle
-              transform={`rotate(${-counterweight.rotation.z * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(counterweight.position).x}, ${
-                this.updatePointPositionToFitCanvas(counterweight.position).y
-              })`}
-              cx={this.updatePointPositionToFitCanvas(counterweight.position).x}
-              cy={this.updatePointPositionToFitCanvas(counterweight.position).y}
-              r={constants.counterweightRadius}
-              fill="#555"
-            />
-            <line
-              x1={this.updatePointPositionToFitCanvas(projectile.position).x}
-              y1={this.updatePointPositionToFitCanvas(projectile.position).y}
-              x2={
-                this.updatePointPositionToFitCanvas(
-                  rotateVectorAlongZ(armProjectilePivot.object1.rotation.z, armProjectilePivot.object1Position).add(armProjectilePivot.object1.position)
-                ).x
-              }
-              y2={
-                this.updatePointPositionToFitCanvas(
-                  rotateVectorAlongZ(armProjectilePivot.object1.rotation.z, armProjectilePivot.object1Position).add(armProjectilePivot.object1.position)
-                ).y
-              }
-              stroke="#222"
-              strokeWidth="0.2"
-            />
+            {/* Trebuchet holding line */}
             <line
               x1={this.updatePointPositionToFitCanvas(new Vector3(0, 0, 0)).x}
               y1={this.updatePointPositionToFitCanvas(new Vector3(0, 0, 0)).y}
               x2={this.updatePointPositionToFitCanvas(new Vector3(0, 0, 0)).x}
               y2={
-                this.updatePointPositionToFitCanvas(rotateVectorAlongZ(armPivot.object1.rotation.z, armPivot.object1Position).add(armPivot.object1.position)).y
+                this.updatePointPositionToFitCanvas(
+                  rotateVectorAlongZ(this.objects.armPivot.object1.rotation.z, this.objects.armPivot.object1Position).add(
+                    this.objects.armPivot.object1.position
+                  )
+                ).y
               }
-              stroke="#009999"
-              strokeWidth="0.2"
+              stroke="#BC6C25"
+              strokeWidth="0.15"
             />
             <line
-              x1={this.updatePointPositionToFitCanvas(counterweight.position).x}
-              y1={this.updatePointPositionToFitCanvas(counterweight.position).y}
+              x1={this.updatePointPositionToFitCanvas(new Vector3(-constants.heightOfPivot / 2, 0, 0)).x}
+              y1={this.updatePointPositionToFitCanvas(new Vector3(-constants.heightOfPivot / 2, 0, 0)).y}
+              x2={this.updatePointPositionToFitCanvas(new Vector3(constants.heightOfPivot / 2, 0, 0)).x}
+              y2={this.updatePointPositionToFitCanvas(new Vector3(constants.heightOfPivot / 2, 0, 0)).y}
+              stroke="#BC6C25"
+              strokeWidth="0.15"
+            />
+            <line
+              x1={this.updatePointPositionToFitCanvas(new Vector3(-constants.heightOfPivot / 3, 0, 0)).x}
+              y1={this.updatePointPositionToFitCanvas(new Vector3(-constants.heightOfPivot / 3, 0, 0)).y}
+              x2={this.updatePointPositionToFitCanvas(new Vector3(0, constants.heightOfPivot / 2, 0)).x}
+              y2={this.updatePointPositionToFitCanvas(new Vector3(0, constants.heightOfPivot / 2, 0)).y}
+              stroke="#BC6C25"
+              strokeWidth="0.15"
+            />
+            <line
+              x1={this.updatePointPositionToFitCanvas(new Vector3(constants.heightOfPivot / 3, 0, 0)).x}
+              y1={this.updatePointPositionToFitCanvas(new Vector3(constants.heightOfPivot / 3, 0, 0)).y}
+              x2={this.updatePointPositionToFitCanvas(new Vector3(0, constants.heightOfPivot / 2, 0)).x}
+              y2={this.updatePointPositionToFitCanvas(new Vector3(0, constants.heightOfPivot / 2, 0)).y}
+              stroke="#BC6C25"
+              strokeWidth="0.15"
+            />
+            {/* Countweight */}
+            <circle
+              transform={`rotate(${-this.objects.counterweight.rotation.z * (180 / Math.PI)}, ${
+                this.updatePointPositionToFitCanvas(this.objects.counterweight.position).x
+              }, ${this.updatePointPositionToFitCanvas(this.objects.counterweight.position).y})`}
+              cx={this.updatePointPositionToFitCanvas(this.objects.counterweight.position).x}
+              cy={this.updatePointPositionToFitCanvas(this.objects.counterweight.position).y}
+              r={constants.counterweightRadius * 3}
+              fill="#555"
+            />
+            {/* Counterweight line */}
+            <line
+              x1={this.updatePointPositionToFitCanvas(this.objects.counterweight.position).x}
+              y1={this.updatePointPositionToFitCanvas(this.objects.counterweight.position).y}
               x2={
                 this.updatePointPositionToFitCanvas(
-                  rotateVectorAlongZ(armCounterweightPivot.object1.rotation.z, armCounterweightPivot.object1Position).add(
-                    armCounterweightPivot.object1.position
+                  rotateVectorAlongZ(this.objects.armCounterweightPivot.object1.rotation.z, this.objects.armCounterweightPivot.object1Position).add(
+                    this.objects.armCounterweightPivot.object1.position
                   )
                 ).x
               }
               y2={
                 this.updatePointPositionToFitCanvas(
-                  rotateVectorAlongZ(armCounterweightPivot.object1.rotation.z, armCounterweightPivot.object1Position).add(
-                    armCounterweightPivot.object1.position
+                  rotateVectorAlongZ(this.objects.armCounterweightPivot.object1.rotation.z, this.objects.armCounterweightPivot.object1Position).add(
+                    this.objects.armCounterweightPivot.object1.position
                   )
                 ).y
               }
               stroke="#222"
               strokeWidth="0.2"
             />
+            {/* Projectile */}
             <circle
-              transform={`rotate(${-projectile.rotation.z * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(projectile.position).x}, ${
-                this.updatePointPositionToFitCanvas(projectile.position).y
-              })`}
-              cx={this.updatePointPositionToFitCanvas(projectile.position).x}
-              cy={this.updatePointPositionToFitCanvas(projectile.position).y}
+              transform={`rotate(${-this.objects.projectile.rotation.z * (180 / Math.PI)}, ${
+                this.updatePointPositionToFitCanvas(this.objects.projectile.position).x
+              }, ${this.updatePointPositionToFitCanvas(this.objects.projectile.position).y})`}
+              cx={this.updatePointPositionToFitCanvas(this.objects.projectile.position).x}
+              cy={this.updatePointPositionToFitCanvas(this.objects.projectile.position).y}
               r={constants.projectileRadius * 5}
               fill="#FFF"
             />
-            {engine.solids.map(s => (
+
+            {/* Projectile line */}
+            {!this.detached && (
+              <line
+                x1={this.updatePointPositionToFitCanvas(this.objects.projectile.position).x}
+                y1={this.updatePointPositionToFitCanvas(this.objects.projectile.position).y}
+                x2={
+                  this.updatePointPositionToFitCanvas(
+                    rotateVectorAlongZ(this.objects.armProjectilePivot.object1.rotation.z, this.objects.armProjectilePivot.object1Position).add(
+                      this.objects.armProjectilePivot.object1.position
+                    )
+                  ).x
+                }
+                y2={
+                  this.updatePointPositionToFitCanvas(
+                    rotateVectorAlongZ(this.objects.armProjectilePivot.object1.rotation.z, this.objects.armProjectilePivot.object1Position).add(
+                      this.objects.armProjectilePivot.object1.position
+                    )
+                  ).y
+                }
+                stroke="#222"
+                strokeWidth="0.2"
+              />
+            )}
+
+            {/* Names */}
+            {this.engine.solids.map(s => (
               <text
                 fontSize="0.04rem"
                 key={s.name + "text"}
@@ -347,8 +330,9 @@ class Visualizer extends React.Component<{}, VizualizerState> {
                 {s.name}
               </text>
             ))}
+            {/* Speeds */}
             {this.state.showSpeeds &&
-              engine.solids.map(s => {
+              this.engine.solids.map(s => {
                 const speedEnd = s.position.add(s.speed.multiply(0.3));
                 return (
                   <line
@@ -362,8 +346,9 @@ class Visualizer extends React.Component<{}, VizualizerState> {
                   />
                 );
               })}
+            {/* Accelerations */}
             {this.state.showAccelerations &&
-              engine.solids.map(s => {
+              this.engine.solids.map(s => {
                 const speedEnd = s.position.add(s.acceleration.multiply(0.2));
                 return (
                   <line
@@ -377,21 +362,32 @@ class Visualizer extends React.Component<{}, VizualizerState> {
                   />
                 );
               })}
+            {/* Forces */}
             {this.state.showForces &&
-              engine.constraints.map(c => {
+              this.engine.constraints.map(c => {
                 const pos = c.object1.position.add(rotateVectorAlongVector(c.object1.rotation, c.object1Position));
                 const force = c.forceAppliedToFirstObject;
                 const forceEnds = pos.add(force.multiply(0.01));
                 return (
-                  <line
-                    key={c.name + "-force"}
-                    x1={this.updatePointPositionToFitCanvas(pos).x}
-                    y1={this.updatePointPositionToFitCanvas(pos).y}
-                    x2={this.updatePointPositionToFitCanvas(forceEnds).x}
-                    y2={this.updatePointPositionToFitCanvas(forceEnds).y}
-                    stroke="#cc22cc"
-                    strokeWidth="0.1"
-                  />
+                  <g key={c.name + "-force"}>
+                    <line
+                      x1={this.updatePointPositionToFitCanvas(pos).x}
+                      y1={this.updatePointPositionToFitCanvas(pos).y}
+                      x2={this.updatePointPositionToFitCanvas(forceEnds).x}
+                      y2={this.updatePointPositionToFitCanvas(forceEnds).y}
+                      stroke="#cc22cc"
+                      strokeWidth="0.1"
+                    />
+                    <text
+                      fontSize="0.04rem"
+                      x={this.updatePointPositionToFitCanvas(pos.add(forceEnds).multiply(0.5)).x}
+                      y={this.updatePointPositionToFitCanvas(pos.add(forceEnds).multiply(0.5)).y}
+                      textAnchor="start"
+                      fill="#cc22cc"
+                    >
+                      {force.norm().toFixed(2)} N
+                    </text>
+                  </g>
                 );
               })}
           </svg>

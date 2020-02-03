@@ -178,6 +178,14 @@ export class Engine {
     return equations;
   }
 
+  removeConstraint(constraint: Constraint) {
+    this.constraints = this.constraints.filter(i => i !== constraint);
+  }
+
+  addConstraint(constraint: Constraint) {
+    this.constraints.push(constraint);
+  }
+
   private getPointSpeed(solid: Solid, point: Vector3): Vector3 {
     //  V M/R = VM/R' + VO'/R + dw/dt ^ O'M
     //           0        A       B      C
@@ -345,7 +353,7 @@ export class Engine {
     // TODO: ensure names of solids and constraints are unique
   }
 
-  public runOneStep(duration?: number) {
+  public runOneStep({ duration, dryRun }: { duration?: number; dryRun?: boolean }) {
     if (!this.initialized) {
       throw new Error("Please call .initialize() first");
     }
@@ -391,41 +399,45 @@ export class Engine {
       }
     }
 
-    // with time, a small bias may appear, we need to fix up the constraints
-
-    for (const constraint of this.constraints) {
-      if (constraint instanceof Pivot) {
-        const positionOfConstraintInObject1 = constraint.object1.position.add(rotateVectorAlongVector(constraint.object1.rotation, constraint.object1Position));
-
-        if (constraint.object2) {
-          const positionOfConstraintInObject2 = constraint.object2.position.add(
-            rotateVectorAlongVector(constraint.object2.rotation, constraint.object2Position)
+    // dry run is used to compute the initial acceleration and forces
+    if (!dryRun) {
+      // with time, a small bias may appear, we need to fix up the constraints
+      for (const constraint of this.constraints) {
+        if (constraint instanceof Pivot) {
+          const positionOfConstraintInObject1 = constraint.object1.position.add(
+            rotateVectorAlongVector(constraint.object1.rotation, constraint.object1Position)
           );
-          const difference = positionOfConstraintInObject2.subtract(positionOfConstraintInObject1);
-          constraint.object2.position = constraint.object2.position.subtract(difference);
-        } else {
-          // it is fixed to the ground
-          var difference = constraint.initialPosition.subtract(positionOfConstraintInObject1);
-          constraint.object1.position = constraint.object1.position.add(difference);
+
+          if (constraint.object2) {
+            const positionOfConstraintInObject2 = constraint.object2.position.add(
+              rotateVectorAlongVector(constraint.object2.rotation, constraint.object2Position)
+            );
+            const difference = positionOfConstraintInObject2.subtract(positionOfConstraintInObject1);
+            constraint.object2.position = constraint.object2.position.subtract(difference);
+          } else {
+            // it is fixed to the ground
+            var difference = constraint.initialPosition.subtract(positionOfConstraintInObject1);
+            constraint.object1.position = constraint.object1.position.add(difference);
+          }
         }
       }
-    }
 
-    // update speeds
-    for (const solid of this.solids) {
-      solid.speed = solid.speed.add(solid.acceleration.multiply(duration)).multiply(1 - this.energyDissipationCoefficient * duration);
-      solid.rotationalSpeed = solid.rotationalSpeed
-        .add(solid.rotationalAcceleration.multiply(duration))
-        .multiply(1 - this.energyDissipationCoefficient * duration);
-    }
+      // update speeds
+      for (const solid of this.solids) {
+        solid.speed = solid.speed.add(solid.acceleration.multiply(duration)).multiply(1 - this.energyDissipationCoefficient * duration);
+        solid.rotationalSpeed = solid.rotationalSpeed
+          .add(solid.rotationalAcceleration.multiply(duration))
+          .multiply(1 - this.energyDissipationCoefficient * duration);
+      }
 
-    // update positions
-    for (const solid of this.solids) {
-      solid.position = solid.position.add(solid.speed.multiply(duration));
-      solid.rotation = solid.rotation.add(solid.rotationalSpeed.multiply(duration));
-    }
+      // update positions
+      for (const solid of this.solids) {
+        solid.position = solid.position.add(solid.speed.multiply(duration));
+        solid.rotation = solid.rotation.add(solid.rotationalSpeed.multiply(duration));
+      }
 
-    // update time
-    this.time += duration;
+      // update time
+      this.time += duration;
+    }
   }
 }
