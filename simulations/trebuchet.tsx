@@ -9,7 +9,7 @@ import { Pivot } from "../engine/models/pivot";
 import { Solid } from "../engine/models/solid";
 import { Vector3 } from "../engine/models/vector3";
 import { rotateVectorAlongZ, rotateVectorAlongVector } from "../utils/vector-utils";
-import { Ponctual } from "../engine/models/ponctual";
+import { Slider } from "../engine/models/slider";
 
 const constants = {
   lengthOfShortArm: 1.75,
@@ -111,13 +111,13 @@ var armProjectilePivot = new Pivot({
   object2: projectile,
   object2Position: tipOfArm.subtract(projectile.position)
 });
-
-var projectileToGround = new Ponctual({
-  isAlongX: true,
+ 
+var projectileToGround = new Slider({
   name: "Projectile to ground",
   object1: projectile,
-  object1Position: new Vector3(0, 0, 0)
-});
+  object1Position: new Vector3(0, 0, 0),
+  axisInrelationToObject2: new Vector3(1,-0.2, 0)
+}); 
 
 var engine = new Engine({
   constraints: [armPivot, armCounterweightPivot, armProjectilePivot, projectileToGround],
@@ -147,7 +147,7 @@ class Visualizer extends React.Component<{}, VizualizerState> {
     this.state = {
       showAccelerations: false,
       showSpeeds: true,
-      showForces: true,
+      showForces: false,
       speed: 0.2
       // stopAtAngle: (45 * Math.PI) / 180
     };

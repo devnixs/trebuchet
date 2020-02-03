@@ -2,13 +2,13 @@ import { Constraint, ConstraintSettings } from "./constraint";
 import { Vector3 } from "./vector3";
 
 interface PonctualSettings extends ConstraintSettings {
-  isAlongX: boolean;
+  axisInrelationToObject2: Vector3;
 }
 
-export class Ponctual extends Constraint {
-  isAlongX: boolean;
+export class Slider extends Constraint {
+  axisInrelationToObject2: Vector3;
   constructor(settings: PonctualSettings) {
     super(settings);
-    this.isAlongX = settings.isAlongX;
+    this.axisInrelationToObject2 = settings.axisInrelationToObject2;
   }
 }

@@ -8,7 +8,7 @@ import { ChainOfSolid } from "./models/chain-of-solid";
 import { Vector3 } from "./models/vector3";
 import { Matrix33 } from "./models/matrix33";
 import { Solver } from "./models/solver";
-import { Ponctual } from "./models/ponctual";
+import { Slider } from "./models/slider";
 
 interface EngineSettings {
   solids: Solid[];
@@ -248,48 +248,48 @@ export class Engine {
     // aG + d²w/dt ^ GP + dw/dt ^ dGP/dt
     //  A      B     C       D      E
 
-    for (const pivot of this.constraints.filter(i => i instanceof Ponctual).map(i => i as Ponctual)) {
+    for (const ponctual of this.constraints.filter(i => i instanceof Slider).map(i => i as Slider)) {
       // Acceleration of pivotal point is the same for both solids
 
-      // firstTerm
-      const C1 = rotateVectorAlongVector(pivot.object1.rotation, pivot.object1Position);
-      const D1 = pivot.object1.rotationalSpeed;
-      const E1 = this.getPointSpeed(pivot.object1, pivot.object1Position).subtract(pivot.object1.speed);
+      let axisInR = ponctual.axisInrelationToObject2;
+      if (ponctual.object2) {
+        // the axis is moving with object2
+        axisInR = rotateVectorAlongVector(ponctual.object2.rotation, ponctual.axisInrelationToObject2);
+      }
 
-      const xTerms: EquationTerm[] = [
-        { element: pivot.object1, unknownFactor: "d²x/dt", value: 1 },
-        { element: pivot.object1, unknownFactor: "d²w/dt", value: -C1.y },
-        { element: pivot.object1, unknownFactor: "none", value: -D1.cross(E1).x }
-      ];
-      const yTerms: EquationTerm[] = [
-        { element: pivot.object1, unknownFactor: "d²y/dt", value: 1 },
-        { element: pivot.object1, unknownFactor: "d²w/dt", value: C1.x },
-        { element: pivot.object1, unknownFactor: "none", value: -D1.cross(E1).y }
+      // it's like the pivot, but we project it along the cross axis
+      const crossAxis = axisInR.rotate(new Vector3(0, 0, Math.PI / 2)).normalize();
+
+      // firstTerm
+      const C1 = rotateVectorAlongVector(ponctual.object1.rotation, ponctual.object1Position);
+      const D1 = ponctual.object1.rotationalSpeed;
+      const E1 = this.getPointSpeed(ponctual.object1, ponctual.object1Position).subtract(ponctual.object1.speed);
+
+      const terms: EquationTerm[] = [
+        { element: ponctual.object1, unknownFactor: "d²x/dt", value: crossAxis.x },
+        { element: ponctual.object1, unknownFactor: "d²w/dt", value: -C1.y * crossAxis.x },
+        { element: ponctual.object1, unknownFactor: "none", value: -D1.cross(E1).x * crossAxis.x },
+
+        { element: ponctual.object1, unknownFactor: "d²y/dt", value: 1 * crossAxis.y },
+        { element: ponctual.object1, unknownFactor: "d²w/dt", value: C1.x * crossAxis.y },
+        { element: ponctual.object1, unknownFactor: "none", value: -D1.cross(E1).y * crossAxis.y }
       ];
 
       // if there's no other part to the pivot, then the acceleration is 0, else, substract the other part of the equation : a = b => a-b=0
       // secondTerm
-      if (pivot.object2) {
-        const C2 = rotateVectorAlongVector(pivot.object2.rotation, pivot.object2Position);
-        const D2 = pivot.object2.rotationalSpeed;
-        const E2 = this.getPointSpeed(pivot.object2, pivot.object2Position).subtract(pivot.object2.speed);
-        xTerms.push({ element: pivot.object2, unknownFactor: "d²x/dt", value: -1 });
-        xTerms.push({ element: pivot.object2, unknownFactor: "d²w/dt", value: C2.y });
-        xTerms.push({ element: pivot.object2, unknownFactor: "none", value: D2.cross(E2).x });
-        yTerms.push({ element: pivot.object2, unknownFactor: "d²y/dt", value: -1 });
-        yTerms.push({ element: pivot.object2, unknownFactor: "d²w/dt", value: -C2.x });
-        yTerms.push({ element: pivot.object2, unknownFactor: "none", value: D2.cross(E2).y });
-      }
+      if (ponctual.object2) {
+        const C2 = rotateVectorAlongVector(ponctual.object2.rotation, ponctual.object2Position);
+        const D2 = ponctual.object2.rotationalSpeed;
+        const E2 = this.getPointSpeed(ponctual.object2, ponctual.object2Position).subtract(ponctual.object2.speed);
+        terms.push({ element: ponctual.object2, unknownFactor: "d²x/dt", value: -1 * crossAxis.x });
+        terms.push({ element: ponctual.object2, unknownFactor: "d²w/dt", value: C2.y * crossAxis.x });
+        terms.push({ element: ponctual.object2, unknownFactor: "none", value: D2.cross(E2).x * crossAxis.x });
 
-      if (!pivot.isAlongX) {
-        equations.push({
-          terms: xTerms
-        });
-      } else {
-        equations.push({
-          terms: yTerms
-        });
+        terms.push({ element: ponctual.object2, unknownFactor: "d²y/dt", value: -1 * crossAxis.y });
+        terms.push({ element: ponctual.object2, unknownFactor: "d²w/dt", value: -C2.x * crossAxis.y });
+        terms.push({ element: ponctual.object2, unknownFactor: "none", value: D2.cross(E2).y * crossAxis.y });
       }
+      equations.push({ terms: terms });
     }
     return equations;
   }
@@ -307,7 +307,7 @@ export class Engine {
           ]
         });
       }
-      if (constraint instanceof Ponctual) {
+      if (constraint instanceof Slider) {
         // ponctuals don't convey any torque
         equations.push({
           terms: [
@@ -317,22 +317,20 @@ export class Engine {
         });
         // ponctuals don't convey any force along their axis
 
-        // TODO: change this to support arbitrary axis, also allow this to work on moving parts.
-        if (constraint.isAlongX) {
-          equations.push({
-            terms: [
-              { element: constraint, unknownFactor: "xforce", value: 1 },
-              { element: null, unknownFactor: "none", value: 0 }
-            ]
-          });
-        } else {
-          equations.push({
-            terms: [
-              { element: constraint, unknownFactor: "yforce", value: 1 },
-              { element: null, unknownFactor: "none", value: 0 }
-            ]
-          });
+        let axisInR = constraint.axisInrelationToObject2;
+        if (constraint.object2) {
+          // the axis is moving with object2
+          axisInR = rotateVectorAlongVector(constraint.object2.rotation, constraint.axisInrelationToObject2);
         }
+
+        // the force is perpendicular to the axis so the dot product is = 0
+        equations.push({
+          terms: [
+            { element: constraint, unknownFactor: "xforce", value: axisInR.x },
+            { element: constraint, unknownFactor: "yforce", value: axisInR.y },
+            { element: null, unknownFactor: "none", value: 0 }
+          ]
+        });
       }
     }
     return equations;

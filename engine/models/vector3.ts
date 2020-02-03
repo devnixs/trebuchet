@@ -1,3 +1,5 @@
+import { rotateVectorAlongVector } from "../../utils/vector-utils";
+
 export class Vector3 {
   constructor(public x: number, public y: number, public z: number) {}
 
@@ -33,8 +35,17 @@ export class Vector3 {
     return Math.sqrt(this.dot(this));
   }
 
-  clone(){
+  clone() {
     return new Vector3(this.x, this.y, this.z);
+  }
+
+  normalize() {
+    const norm = this.norm();
+    return new Vector3(this.x / norm, this.y / norm, this.z / norm);
+  }
+
+  rotate(rotation: Vector3) {
+    return rotateVectorAlongVector(rotation, this);
   }
 
   angle() {
