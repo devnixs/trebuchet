@@ -118,7 +118,7 @@ class Visualizer extends React.Component {
   uiMultiplier = 1;
 
   updatePointPositionToFitCanvas(pos: Vector3) {
-    return new Vector3(pos.x, 20 - pos.y, pos.z).multiply(this.uiMultiplier);
+    return new Vector3(pos.x, 15 - pos.y, pos.z).multiply(this.uiMultiplier);
   }
 
   render() {
@@ -128,9 +128,9 @@ class Visualizer extends React.Component {
     return (
       <div>
         <button onClick={() => this.runOneStep()}>Next Step</button>
-        <button onClick={() => this.runNTimes(5)}>Run 5 times</button>
+        <button onClick={() => this.runNTimes(10)}>Run 10 times</button>
         <div>
-          <svg width="1000" height="500" viewBox="-20 0 40 20">
+          <svg width="1000" height="300" viewBox="-20 0 40 15">
             {engine.constraints.map(c => {
               const posRelativeToObject = rotateVectorAlongZ(c.object1.rotation.z, c.object1Position);
               const pos = c.object1.position.add(posRelativeToObject);
@@ -154,7 +154,7 @@ class Visualizer extends React.Component {
             />
             {engine.solids.map(s => (
               <text
-                font-size="0.04rem"
+                fontSize="0.04rem"
                 key={s.name + "text"}
                 transform={`rotate(${-(s.rotation.z) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(s.position).x}, ${this.updatePointPositionToFitCanvas(s.position).y})`}
                 x={this.updatePointPositionToFitCanvas(s.position).x}

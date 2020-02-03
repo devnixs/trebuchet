@@ -99,7 +99,7 @@ export class Engine {
       equations.push({
         terms: [
           {
-            value: - solid.mass * this.gravity,
+            value: -solid.mass * this.gravity,
             element: null,
             unknownFactor: "none"
           },
@@ -215,7 +215,7 @@ export class Engine {
       // F
       {
         element: chain.element,
-        unknownFactor: axis.toString() === "[[1], [0], [0]]" ? "d²x/dt" : "d²y/dt",
+        unknownFactor: axis.x ? 'd²x/dt': 'd²y/dt',
         value: 1
       },
       // B ^ C
@@ -303,7 +303,7 @@ export class Engine {
         unknownFactor: "none",
         value: yAxis.dot(D)
       },
-      ...this.getPointAccelerationInSolid(chain, pivotPosition, yAxis)
+      ...this.getPointAccelerationInSolid(chain, pivotPosition, yAxis).map(i => ({ element: i.element, unknownFactor: i.unknownFactor, value: -1 * i.value }))
     ];
     equations.push({ terms: yTerms });
 
