@@ -86,7 +86,7 @@ var engine = new Engine({
   constraints: [armPivot, armCounterweightPivot],
   gravity: 9.8,
   solids: [arm, counterweight],
-  timeStep: 0.1
+  timeStep: 0.01
 });
 
 engine.initialize();
@@ -94,12 +94,16 @@ engine.initialize();
 
 class Visualizer extends React.Component {
   sub: number;
+  play: boolean;
   componentDidMount() {
     // this.sub = setInterval(() => this.runOneStep(), 1000);
+    document.onkeyup = this.onKeyUp;
   }
 
   componentWillUnmount() {
     clearInterval(this.sub);
+
+    document.onkeyup = undefined;
   }
 
   runOneStep() {
@@ -107,30 +111,52 @@ class Visualizer extends React.Component {
     this.forceUpdate();
   }
 
-  async runNTimes(n: number) {
-    for (let i = 0; i < n; i++) {
+  async run() {
+    this.play = true;
+    while (this.play) {
       engine.runOneStep();
       this.forceUpdate();
-      await new Promise(r => setTimeout(r, 0.1));
+      await new Promise(r => setTimeout(r, 100));
     }
   }
 
-  uiMultiplier = 1;
+  runNTimes(n: number) {
+    for (let i = 0; i < n; i++) {
+      engine.runOneStep();
+    }
+    this.forceUpdate();
+  }
 
   updatePointPositionToFitCanvas(pos: Vector3) {
-    return new Vector3(pos.x, 15 - pos.y, pos.z).multiply(this.uiMultiplier);
+    return new Vector3(pos.x, 15 - pos.y, pos.z);
   }
+
+  onKeyUp = (e: KeyboardEvent) => {
+    if (e.which == 65) {
+      engine.runOneStep();
+      this.forceUpdate();
+    }
+  };
 
   render() {
     console.log(engine);
 
-
     return (
       <div>
         <button onClick={() => this.runOneStep()}>Next Step</button>
-        <button onClick={() => this.runNTimes(10)}>Run 10 times</button>
+        {!this.play ? <button onClick={() => this.run()}>Play</button> : <button onClick={() => (this.play = false)}>Stop</button>}
+        {<button onClick={() => this.runNTimes(55)}>Run 55 times</button>}
         <div>
           <svg width="1000" height="300" viewBox="-20 0 40 15">
+            <text
+              fontSize="0.04rem"
+              x={0}
+              y={1}
+              textAnchor="start"
+              fill="#ccc"
+            >
+              Ellapsed {engine.time}s
+            </text>
             {engine.constraints.map(c => {
               const posRelativeToObject = rotateVectorAlongZ(c.object1.rotation.z, c.object1Position);
               const pos = c.object1.position.add(posRelativeToObject);
@@ -138,15 +164,19 @@ class Visualizer extends React.Component {
               return <circle key={c.name} cx={UIPos.x} cy={UIPos.y} r="0.3" fill="#009999" />;
             })}
             <rect
-              transform={`rotate(${-(arm.rotation.z + constants.initialAngle) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(arm.position).x}, ${this.updatePointPositionToFitCanvas(arm.position).y})`}
+              transform={`rotate(${-(arm.rotation.z + constants.initialAngle) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(arm.position).x}, ${
+                this.updatePointPositionToFitCanvas(arm.position).y
+              })`}
               x={this.updatePointPositionToFitCanvas(arm.position).x - (constants.lengthOfLongArm + constants.lengthOfShortArm) / 2}
               y={this.updatePointPositionToFitCanvas(arm.position).y - constants.armWidth / 2}
               width={constants.lengthOfLongArm + constants.lengthOfShortArm}
-              height={constants.armWidth * this.uiMultiplier}
+              height={constants.armWidth}
               fill="#555"
             />
             <circle
-              transform={`rotate(${-(counterweight.rotation.z) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(counterweight.position).x}, ${this.updatePointPositionToFitCanvas(counterweight.position).y})`}
+              transform={`rotate(${-counterweight.rotation.z * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(counterweight.position).x}, ${
+                this.updatePointPositionToFitCanvas(counterweight.position).y
+              })`}
               cx={this.updatePointPositionToFitCanvas(counterweight.position).x}
               cy={this.updatePointPositionToFitCanvas(counterweight.position).y}
               r={constants.counterweightRadius}
@@ -156,7 +186,9 @@ class Visualizer extends React.Component {
               <text
                 fontSize="0.04rem"
                 key={s.name + "text"}
-                transform={`rotate(${-(s.rotation.z) * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(s.position).x}, ${this.updatePointPositionToFitCanvas(s.position).y})`}
+                transform={`rotate(${-s.rotation.z * (180 / Math.PI)}, ${this.updatePointPositionToFitCanvas(s.position).x}, ${
+                  this.updatePointPositionToFitCanvas(s.position).y
+                })`}
                 x={this.updatePointPositionToFitCanvas(s.position).x}
                 y={this.updatePointPositionToFitCanvas(s.position).y}
                 textAnchor="middle"
@@ -165,6 +197,34 @@ class Visualizer extends React.Component {
                 {s.name}
               </text>
             ))}
+            {engine.solids.map(s => {
+              const speedEnd = s.position.add(s.speed.multiply(0.1));
+              return (
+                <line
+                  key={s.name + "-speed"}
+                  x1={this.updatePointPositionToFitCanvas(s.position).x+0.1}
+                  y1={this.updatePointPositionToFitCanvas(s.position).y}
+                  x2={this.updatePointPositionToFitCanvas(speedEnd).x+0.1}
+                  y2={this.updatePointPositionToFitCanvas(speedEnd).y}
+                  stroke="#992222"
+                  strokeWidth="0.1"
+                />
+              );
+            })}
+            {engine.solids.map(s => {
+              const speedEnd = s.position.add(s.acceleration.multiply(0.1));
+              return (
+                <line
+                  key={s.name + "-acceleration"}
+                  x1={this.updatePointPositionToFitCanvas(s.position).x}
+                  y1={this.updatePointPositionToFitCanvas(s.position).y}
+                  x2={this.updatePointPositionToFitCanvas(speedEnd).x}
+                  y2={this.updatePointPositionToFitCanvas(speedEnd).y}
+                  stroke="#222299"
+                  strokeWidth="0.1"
+                />
+              );
+            })}
           </svg>
         </div>
       </div>

@@ -13,7 +13,7 @@ interface EngineSettings {
   solids: Solid[];
   constraints: Constraint[];
 
-  timeStep: 0.1;
+  timeStep: number;
   gravity: number;
 }
 
@@ -215,7 +215,7 @@ export class Engine {
       // F
       {
         element: chain.element,
-        unknownFactor: axis.x ? 'd²x/dt': 'd²y/dt',
+        unknownFactor: axis.x ? "d²x/dt" : "d²y/dt",
         value: 1
       },
       // B ^ C
@@ -326,13 +326,76 @@ export class Engine {
     return equations;
   }
 
-  private addPivotRelationships() {
+  private addPivotRelationships1() {
     const pivotLinkedToGround = this.constraints.filter(i => i instanceof Pivot).find(i => !i.object2);
     if (!pivotLinkedToGround) {
       throw new Error("Could not a find a constraint that linked the structure to the ground");
     }
 
     return this.addPivotRelationshipInner({ parentConstraint: pivotLinkedToGround, element: pivotLinkedToGround.object1 });
+  }
+
+  private getPointSpeed(solid: Solid, point: Vector3): Vector3 {
+    //  V M/R = VM/R' + VO'/R + dw/dt ^ O'M
+    //           0        A       B      C
+
+    const A = solid.speed;
+    const B = solid.rotationalSpeed;
+    const C = rotateVectorAlongVector(solid.rotation, point);
+
+    const BC = B.cross(C);
+    return A.add(BC);
+  }
+
+  private addPivotRelationships2() {
+    const equations = [] as Equation[];
+
+    // Acceleration of pivotal point P =
+    // aG + d²w/dt ^ GP + dw/dt ^ dGP/dt
+    //  A      B     C       D      E
+
+    for (const pivot of this.constraints.filter(i => i instanceof Pivot)) {
+      // Acceleration of pivotal point is the same for both solids
+
+      // firstTerm
+      const C1 = rotateVectorAlongVector(pivot.object1.rotation, pivot.object1Position);
+      const D1 = pivot.object1.rotationalSpeed;
+      const E1 = this.getPointSpeed(pivot.object1, pivot.object1Position).subtract(pivot.object1.speed);
+
+      const xTerms: EquationTerm[] = [
+        { element: pivot.object1, unknownFactor: "d²x/dt", value: 1 },
+        { element: pivot.object1, unknownFactor: "d²w/dt", value: -C1.y },
+        { element: pivot.object1, unknownFactor: "none", value: -D1.cross(E1).x }
+      ];
+      const yTerms: EquationTerm[] = [
+        { element: pivot.object1, unknownFactor: "d²y/dt", value: 1 },
+        { element: pivot.object1, unknownFactor: "d²w/dt", value: C1.x },
+        { element: pivot.object1, unknownFactor: "none", value: -D1.cross(E1).y }
+      ];
+
+      // if there's no other part to the pivot, then the acceleration is 0, else, substract the other part of the equation : a = b => a-b=0
+      // secondTerm
+      if (pivot.object2) {
+        const C2 = rotateVectorAlongVector(pivot.object2.rotation, pivot.object2Position);
+        const D2 = pivot.object2.rotationalSpeed;
+        const E2 = this.getPointSpeed(pivot.object2, pivot.object2Position).subtract(pivot.object2.speed);
+        xTerms.push({ element: pivot.object2, unknownFactor: "d²x/dt", value: -1 });
+        xTerms.push({ element: pivot.object2, unknownFactor: "d²w/dt", value: C2.y });
+        xTerms.push({ element: pivot.object2, unknownFactor: "none", value: D2.cross(E2).x });
+        yTerms.push({ element: pivot.object2, unknownFactor: "d²y/dt", value: -1 });
+        yTerms.push({ element: pivot.object2, unknownFactor: "d²w/dt", value: -C2.x });
+        yTerms.push({ element: pivot.object2, unknownFactor: "none", value: D2.cross(E2).y });
+      }
+
+      equations.push({
+        terms: xTerms
+      });
+
+      equations.push({
+        terms: yTerms
+      });
+    }
+    return equations;
   }
 
   private runChecks() {
@@ -355,7 +418,8 @@ export class Engine {
     let equations: Equation[] = [];
     equations = equations.concat(this.applySumOfForces());
     equations = equations.concat(this.applyDynamicMomentEquation());
-    equations = equations.concat(this.addPivotRelationships());
+    // equations = equations.concat(this.addPivotRelationships1());
+    equations = equations.concat(this.addPivotRelationships2());
 
     const solver = new Solver(equations);
     const solutions = solver.solve();
