@@ -1,8 +1,8 @@
-import { Matrix } from "mathjs";
-import MathJs from "mathjs";
+import { Vector3 } from "../engine/models/vector3";
+import { Matrix33 } from "../engine/models/matrix33";
 
-export function rotateVectorAlongZ(angle: number, vector: Matrix) {
-  const rotationMatrix = MathJs.matrix([
+export function rotateVectorAlongZ(angle: number, vector: Vector3) {
+  const rotationMatrix = new Matrix33([
     [Math.cos(angle), -Math.sin(angle), 0],
     [Math.sin(angle), Math.cos(angle), 0],
     [0, 0, 1]
@@ -10,10 +10,10 @@ export function rotateVectorAlongZ(angle: number, vector: Matrix) {
   return rotateVector(rotationMatrix, vector);
 }
 
-export function rotateVectorAlongMatrix(angleMatrix: Matrix, vector: Matrix) {
-  const angle = angleMatrix.subset(MathJs.index(2, 0)) as any;
+export function rotateVectorAlongVector(angleMatrix: Vector3, vector: Vector3) {
+  const angle = angleMatrix.z;
   // we only support Z axis rotation for now
-  const rotationMatrix = MathJs.matrix([
+  const rotationMatrix = new Matrix33([
     [Math.cos(angle), -Math.sin(angle), 0],
     [Math.sin(angle), Math.cos(angle), 0],
     [0, 0, 1]
@@ -21,6 +21,6 @@ export function rotateVectorAlongMatrix(angleMatrix: Matrix, vector: Matrix) {
   return rotateVector(rotationMatrix, vector);
 }
 
-export function rotateVector(rotationMatrix: Matrix, vector: Matrix) {
-  return MathJs.multiply(rotationMatrix, vector);
+export function rotateVector(rotationMatrix: Matrix33, vector: Vector3) {
+  return rotationMatrix.multiply(vector);
 }

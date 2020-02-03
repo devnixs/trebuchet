@@ -1,11 +1,13 @@
-import MathJs, { Matrix } from "mathjs";
-import { rotateVectorAlongZ, rotateVector, rotateVectorAlongMatrix } from "../utils/vector-utils";
+// import MathJs, { Matrix } from "mathjs";
+import { rotateVectorAlongZ, rotateVector, rotateVectorAlongVector } from "../utils/vector-utils";
 import { Constraint } from "./models/constraint";
 import { Pivot } from "./models/pivot";
 import { Solid } from "./models/solid";
 import { SolutionMatrix } from "./models/solution-matrix";
 import { EquationTerm, Equation } from "./models/equation";
 import { ChainOfSolid } from "./models/chain-of-solid";
+import { Vector3 } from "./models/vector3";
+import { Matrix33 } from "./models/matrix33";
 
 interface EngineSettings {
   solids: Solid[];
@@ -53,9 +55,9 @@ export class Engine {
   public initialize() {
     this.runChecks();
     // inialise speeds
-    this.solids.forEach(s => (s.speed = MathJs.zeros(3, 1) as Matrix));
-    this.solids.forEach(s => (s.rotation = MathJs.zeros(3, 1) as Matrix));
-    this.solids.forEach(s => (s.rotationalSpeed = MathJs.zeros(3, 1) as Matrix));
+    this.solids.forEach(s => (s.speed = Vector3.zero()));
+    this.solids.forEach(s => (s.rotation = Vector3.zero()));
+    this.solids.forEach(s => (s.rotationalSpeed = Vector3.zero()));
 
     this.initialized = true;
   }
@@ -127,39 +129,39 @@ export class Engine {
         terms: [
           {
             unknownFactor: "d²w/dt",
-            value: solid.inertia.subset(MathJs.index(2, 2)) as any,
+            value: solid.inertia.get(2, 2),
             element: solid
           },
           ...constraintsOfThisSolid.map(c => {
             if (c.object1 === solid) {
-              const force = rotateVectorAlongZ(solid.rotation.subset(MathJs.index(2, 0)) as any, c.object1Position);
+              const GP = rotateVectorAlongVector(solid.rotation, c.object1Position);
               return {
                 unknownFactor: "xforce",
-                value: force.subset(MathJs.index(0, 1)) as any,
+                value: GP.y,
                 element: c
               } as EquationTerm;
             } else {
-              const force = rotateVectorAlongZ(solid.rotation.subset(MathJs.index(2, 0)) as any, c.object2Position);
+              const GP = rotateVectorAlongVector(solid.rotation, c.object2Position);
               return {
                 unknownFactor: "xforce",
-                value: -force.subset(MathJs.index(0, 1)) as any,
+                value: -GP.y,
                 element: c
               } as EquationTerm;
             }
           }),
           ...constraintsOfThisSolid.map(c => {
             if (c.object1 === solid) {
-              const force = rotateVectorAlongZ(solid.rotation.subset(MathJs.index(2, 0)) as any, c.object1Position);
+              const GP = rotateVectorAlongVector(solid.rotation, c.object1Position);
               return {
                 unknownFactor: "yforce",
-                value: force.subset(MathJs.index(0, 0)) as any,
+                value: GP.x,
                 element: c
               } as EquationTerm;
             } else {
-              const force = rotateVectorAlongZ(solid.rotation.subset(MathJs.index(2, 0)) as any, c.object2Position);
+              const GP = rotateVectorAlongVector(solid.rotation, c.object2Position);
               return {
                 unknownFactor: "yforce",
-                value: -force.subset(MathJs.index(0, 0)) as any,
+                value: -GP.x,
                 element: c
               } as EquationTerm;
             }
@@ -170,40 +172,40 @@ export class Engine {
     }
   }
 
-  private getPointSpeedInSolid(chain: ChainOfSolid, point: Matrix): Matrix {
+  private getPointSpeedInSolid(chain: ChainOfSolid, point: Vector3): Vector3 {
     //  V M/R = VM/R' + VO'/R + dw/dt ^ O'M
     //            0
 
-    const baseSpeed = MathJs.cross(chain.element.rotationalSpeed, rotateVectorAlongMatrix(chain.element.rotation, point)) as Matrix;
+    const baseSpeed = chain.element.rotationalSpeed.cross(rotateVectorAlongVector(chain.element.rotation, point));
 
     if (!chain.parent) {
-      return baseSpeed as Matrix;
+      return baseSpeed as Vector3;
     } else {
       const originSpeed = this.getPointSpeedInSolid(
         chain.parent,
         chain.parentConstraint.object1 === chain.element ? chain.parentConstraint.object2Position : chain.parentConstraint.object1Position
       );
-      return MathJs.add(baseSpeed, originSpeed) as Matrix;
+      return baseSpeed.add(originSpeed);
     }
   }
 
-  private getPointAccelerationInSolid(chain: ChainOfSolid, point: Matrix, axis: Matrix) {
+  private getPointAccelerationInSolid(chain: ChainOfSolid, point: Vector3, axis: Vector3) {
     //  aM/R = aO'/R  + d²w/dt² ^ O'M + dw/dt ^ dO'M/dt
     //    F       A       B        C      D         E
 
     const pivotPosition = chain.parentConstraint.object1 === chain.element ? chain.parentConstraint.object1Position : chain.parentConstraint.object2Position;
 
     // O'M = GM - GO'
-    var GM = rotateVectorAlongMatrix(chain.element.rotation, point);
-    var GOp = rotateVectorAlongMatrix(chain.element.rotation, pivotPosition);
-    var OpM = MathJs.subtract(GM, GOp) as Matrix;
+    var GM = rotateVectorAlongVector(chain.element.rotation, point);
+    var GOp = rotateVectorAlongVector(chain.element.rotation, pivotPosition);
+    var OpM = GM.subtract(GOp);
 
     // O'M = OM - OO'
 
     var dOMdt = this.getPointSpeedInSolid(chain, point);
     var dOOpdt = this.getPointSpeedInSolid(chain, pivotPosition);
-    var dOpMdt = MathJs.subtract(dOMdt, dOOpdt) as Matrix;
-    var DE = MathJs.cross(chain.element.rotationalSpeed, dOpMdt);
+    var dOpMdt = dOMdt.subtract(dOOpdt);
+    var DE = chain.element.rotationalSpeed.cross(dOpMdt);
 
     let terms: EquationTerm[] = [
       // F
@@ -216,12 +218,12 @@ export class Engine {
       {
         element: chain.element,
         unknownFactor: "d²w/dt",
-        value: MathJs.dot(OpM, axis)
+        value: OpM.dot(axis)
       },
       {
         element: chain.element,
         unknownFactor: "none",
-        value: MathJs.dot(DE, axis)
+        value: DE.dot(axis)
       }
     ];
 
@@ -245,15 +247,15 @@ export class Engine {
     //  A     B            C           D
 
     // dPG/dt = OG - OP;
-    const dOGdt = this.getPointSpeedInSolid(chain, MathJs.zeros(3, 1) as Matrix);
+    const dOGdt = this.getPointSpeedInSolid(chain, Vector3.zero());
     const pivotPosition = chain.parentConstraint.object1 === chain.element ? chain.parentConstraint.object1Position : chain.parentConstraint.object2Position;
     const dOPdt = this.getPointSpeedInSolid(chain, pivotPosition);
-    const dPGdt = MathJs.subtract(dOGdt, dOPdt) as Matrix;
-    const D = MathJs.cross(chain.element.rotationalSpeed, dPGdt) as Matrix;
+    const dPGdt = dOGdt.subtract(dOPdt);
+    const D = chain.element.rotationalSpeed.cross(dPGdt);
 
-    const xAxis = MathJs.matrix([[1], [0], [0]]);
-    const yAxis = MathJs.matrix([[1], [0], [0]]);
-    const zAxis = MathJs.matrix([[0], [0], [1]]);
+    const xAxis = new Vector3(1, 0, 0);
+    const yAxis = new Vector3(0, 1, 0);
+    const zAxis = new Vector3(0, 0, 1);
 
     const xTerms: EquationTerm[] = [
       // A
@@ -266,13 +268,13 @@ export class Engine {
       {
         element: chain.element,
         unknownFactor: "d²w/dt",
-        value: -MathJs.dot(yAxis, rotateVectorAlongZ(MathJs.dot(zAxis, chain.element.rotation) as any, pivotPosition))
+        value: -yAxis.dot(rotateVectorAlongZ(zAxis.dot(chain.element.rotation), pivotPosition))
       },
       // D
       {
         element: null,
         unknownFactor: "none",
-        value: MathJs.dot(xAxis, D)
+        value: xAxis.dot(D)
       },
       ...this.getPointAccelerationInSolid(chain, pivotPosition, xAxis)
     ];
@@ -289,13 +291,13 @@ export class Engine {
       {
         element: chain.element,
         unknownFactor: "d²w/dt",
-        value: MathJs.dot(xAxis, rotateVectorAlongZ(MathJs.dot(zAxis, chain.element.rotation) as any, pivotPosition))
+        value: xAxis.dot(rotateVectorAlongZ(zAxis.dot(chain.element.rotation), pivotPosition))
       },
       // D
       {
         element: null,
         unknownFactor: "none",
-        value: MathJs.dot(yAxis, D)
+        value: yAxis.dot(D)
       },
       ...this.getPointAccelerationInSolid(chain, pivotPosition, yAxis)
     ];
@@ -348,7 +350,5 @@ export class Engine {
     equations = equations.concat(this.applySumOfForces());
     equations = equations.concat(this.applyDynamicMomentEquation());
     equations = equations.concat(this.addPivotRelationships());
-
-    
   }
 }

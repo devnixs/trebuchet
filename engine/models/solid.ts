@@ -1,10 +1,12 @@
 import { Matrix } from "mathjs";
 import { Constraint } from "./constraint";
+import { Matrix33 } from "./matrix33";
+import { Vector3 } from "./vector3";
 
 interface SolidSettings {
   name: string;
-  initialPosition: Matrix;
-  inertia: Matrix;
+  initialPosition: Vector3;
+  inertia: Matrix33;
   mass: number;
 }
 
@@ -15,17 +17,17 @@ export class Solid {
     this.mass = settings.mass;
     this.name = settings.name;
   }
-  inertia: Matrix;
+  inertia: Matrix33;
   mass: number;
   name: string;
-  position: Matrix;
-  rotation: Matrix;
+  position: Vector3;
+  rotation: Vector3;
 
-  speed: Matrix;
-  rotationalSpeed: Matrix;
+  speed: Vector3;
+  rotationalSpeed: Vector3;
 
-  acceleration: Matrix;
-  rotationalAcceleration: Matrix;
+  acceleration: Vector3;
+  rotationalAcceleration: Vector3;
 
   toString() {
     return this.name;

@@ -1,24 +1,25 @@
 import { Matrix } from "mathjs";
 import { Solid } from "./solid";
+import { Vector3 } from "./vector3";
 
 export interface ConstraintSettings {
   name: string;
   object1: Solid;
   object2?: Solid;
 
-  object1Position: Matrix;
-  object2Position?: Matrix;
+  object1Position: Vector3;
+  object2Position?: Vector3;
 }
 
 export class Constraint {
   name: string;
 
-  forceAppliedToFirstObject: Matrix;
-  torqueAppliedToFirstObject: Matrix;
+  forceAppliedToFirstObject: Vector3;
+  torqueAppliedToFirstObject: Vector3;
   object1: Solid;
-  object1Position: Matrix;
+  object1Position: Vector3;
   object2?: Solid;
-  object2Position?: Matrix;
+  object2Position?: Vector3;
 
   constructor(settings: ConstraintSettings) {
     this.name = settings.name;
