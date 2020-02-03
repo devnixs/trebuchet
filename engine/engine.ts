@@ -3,7 +3,6 @@ import { rotateVectorAlongZ, rotateVector, rotateVectorAlongVector } from "../ut
 import { Constraint } from "./models/constraint";
 import { Pivot } from "./models/pivot";
 import { Solid } from "./models/solid";
-import { SolutionMatrix } from "./models/solution-matrix";
 import { EquationTerm, Equation } from "./models/equation";
 import { ChainOfSolid } from "./models/chain-of-solid";
 import { Vector3 } from "./models/vector3";
@@ -336,6 +335,8 @@ export class Engine {
     if (solidWithNoConstraint) {
       throw Error('Solid "' + solidWithNoConstraint.name + '" had no constraint. This is not supported');
     }
+
+    // TODO: ensure names of solids and constraints are unique
   }
 
   public runOneStep() {

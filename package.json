@@ -18,9 +18,11 @@
   "homepage": "https://github.com/devnixs/trebuchet#readme",
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.12.0",
+    "@types/lodash": "^4.14.149",
     "@types/mathjs": "^6.0.4",
     "bootstrap": "^4.4.1",
     "jquery": "^3.4.1",
+    "lodash": "^4.17.15",
     "mathjs": "^6.6.0",
     "parcel-bundler": "^1.12.4",
     "popper.js": "^1.16.1",
