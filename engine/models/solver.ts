@@ -1,5 +1,5 @@
 import { Matrix, zeros as emptyMatrix, index as MathJsIndex, multiply, inv as inverseMatrix } from "mathjs";
-import { Equation, EquationTerm } from "./equation";
+import { Equation, EquationTerm, Solution } from "./equation";
 import lodash from "lodash";
 
 export class Solver {
@@ -60,6 +60,6 @@ export class Solver {
       unknown: u.unknownFactor,
       value: solutionVector.subset(MathJsIndex(index, 0)) as any as number,
       element: u.element
-    }));
+    } as Solution));
   }
 }

@@ -3,7 +3,7 @@ import { rotateVectorAlongZ, rotateVector, rotateVectorAlongVector } from "../ut
 import { Constraint } from "./models/constraint";
 import { Pivot } from "./models/pivot";
 import { Solid } from "./models/solid";
-import { EquationTerm, Equation } from "./models/equation";
+import { EquationTerm, Equation, Solution, addSolution, multiplySolution } from "./models/equation";
 import { ChainOfSolid } from "./models/chain-of-solid";
 import { Vector3 } from "./models/vector3";
 import { Matrix33 } from "./models/matrix33";
@@ -353,17 +353,7 @@ export class Engine {
     // TODO: ensure names of solids and constraints are unique
   }
 
-  public runOneStep({ duration, dryRun }: { duration?: number; dryRun?: boolean }) {
-    if (!this.initialized) {
-      throw new Error("Please call .initialize() first");
-    }
-    if (!duration || duration < 0 || duration > this.maxTimeStep) {
-      duration = this.maxTimeStep;
-    }
-
-    // We're looking for 2 linear acceleration and 1 angular acceleration for each solid
-    // + 2 forces for each constraints
-
+  private computeSolutions() {
     let equations: Equation[] = [];
     equations = equations.concat(this.applySumOfForces());
     equations = equations.concat(this.applyDynamicMomentEquation());
@@ -374,69 +364,173 @@ export class Engine {
     const solver = new Solver(equations);
     const solutions = solver.solve();
 
+    return solutions;
+  }
+
+  private applySolutionsToElements(solutions: Solution[]) {
     for (const solution of solutions) {
       if (solution.element instanceof Solid) {
         if (solution.unknown === "d²x/dt") {
-          solution.element.acceleration.x = solution.value;
+          solution.element.acceleration = new Vector3(solution.value, solution.element.acceleration.y, solution.element.acceleration.z);
         }
         if (solution.unknown === "d²y/dt") {
-          solution.element.acceleration.y = solution.value;
+          solution.element.acceleration = new Vector3(solution.element.acceleration.x, solution.value, solution.element.acceleration.z);
         }
         if (solution.unknown === "d²w/dt") {
-          solution.element.rotationalAcceleration.z = solution.value;
+          solution.element.rotationalAcceleration = new Vector3(
+            solution.element.rotationalAcceleration.x,
+            solution.element.rotationalAcceleration.y,
+            solution.value
+          );
         }
       }
       if (solution.element instanceof Constraint) {
         if (solution.unknown === "xforce") {
-          solution.element.forceAppliedToFirstObject.x = solution.value;
+          solution.element.forceAppliedToFirstObject = new Vector3(
+            solution.value,
+            solution.element.forceAppliedToFirstObject.y,
+            solution.element.forceAppliedToFirstObject.z
+          );
         }
         if (solution.unknown === "yforce") {
-          solution.element.forceAppliedToFirstObject.y = solution.value;
+          solution.element.forceAppliedToFirstObject = new Vector3(
+            solution.element.forceAppliedToFirstObject.x,
+            solution.value,
+            solution.element.forceAppliedToFirstObject.z
+          );
         }
         if (solution.unknown === "ztorque") {
-          solution.element.torqueAppliedToFirstObject.z = solution.value;
+          solution.element.forceAppliedToFirstObject = new Vector3(
+            solution.element.forceAppliedToFirstObject.x,
+            solution.element.forceAppliedToFirstObject.y,
+            solution.value
+          );
         }
       }
     }
+  }
 
-    // dry run is used to compute the initial acceleration and forces
-    if (!dryRun) {
-      // with time, a small bias may appear, we need to fix up the constraints
-      for (const constraint of this.constraints) {
-        if (constraint instanceof Pivot) {
-          const positionOfConstraintInObject1 = constraint.object1.position.add(
-            rotateVectorAlongVector(constraint.object1.rotation, constraint.object1Position)
+  private fixConstraints() {
+    // with time, a small bias may appear, we need to fix up the constraints
+    for (const constraint of this.constraints) {
+      if (constraint instanceof Pivot) {
+        const positionOfConstraintInObject1 = constraint.object1.position.add(rotateVectorAlongVector(constraint.object1.rotation, constraint.object1Position));
+
+        if (constraint.object2) {
+          const positionOfConstraintInObject2 = constraint.object2.position.add(
+            rotateVectorAlongVector(constraint.object2.rotation, constraint.object2Position)
           );
-
-          if (constraint.object2) {
-            const positionOfConstraintInObject2 = constraint.object2.position.add(
-              rotateVectorAlongVector(constraint.object2.rotation, constraint.object2Position)
-            );
-            const difference = positionOfConstraintInObject2.subtract(positionOfConstraintInObject1);
-            constraint.object2.position = constraint.object2.position.subtract(difference);
-          } else {
-            // it is fixed to the ground
-            var difference = constraint.initialPosition.subtract(positionOfConstraintInObject1);
-            constraint.object1.position = constraint.object1.position.add(difference);
-          }
+          const difference = positionOfConstraintInObject2.subtract(positionOfConstraintInObject1);
+          constraint.object2.position = constraint.object2.position.subtract(difference);
+        } else {
+          // it is fixed to the ground
+          var difference = constraint.initialPosition.subtract(positionOfConstraintInObject1);
+          constraint.object1.position = constraint.object1.position.add(difference);
         }
       }
+      // TODO: apply slider fixes
+    }
+  }
 
-      // update speeds
-      for (const solid of this.solids) {
-        solid.speed = solid.speed.add(solid.acceleration.multiply(duration)).multiply(1 - this.energyDissipationCoefficient * duration);
-        solid.rotationalSpeed = solid.rotationalSpeed
-          .add(solid.rotationalAcceleration.multiply(duration))
-          .multiply(1 - this.energyDissipationCoefficient * duration);
+  private moveObjectsAccordingToTheirAcceleration(timeStep: number) {
+    // update speeds
+    for (const solid of this.solids) {
+      solid.speed = solid.speed.add(solid.acceleration.multiply(timeStep)); //.multiply(1 - this.energyDissipationCoefficient * timeStep);
+      solid.rotationalSpeed = solid.rotationalSpeed.add(solid.rotationalAcceleration.multiply(timeStep));
+      //.multiply(1 - this.energyDissipationCoefficient * timeStep);
+    }
+
+    // update positions
+    for (const solid of this.solids) {
+      solid.position = solid.position.add(solid.speed.multiply(timeStep));
+      solid.rotation = solid.rotation.add(solid.rotationalSpeed.multiply(timeStep));
+    }
+  }
+
+  private computeRungeKuttaOrder4(timeStep: number) {
+    const backups = this.solids.map(i => ({
+      solid: i,
+      speed: i.speed,
+      position: i.position,
+      rotation: i.rotation,
+      rotationalSpeed: i.rotationalSpeed
+    }));
+
+    // K1
+    const k1 = this.computeSolutions();
+
+    // K2
+    // for k2, we need to move half a timestep.
+    this.applySolutionsToElements(k1);
+    this.moveObjectsAccordingToTheirAcceleration(timeStep / 2);
+
+    const k2 = this.computeSolutions();
+
+    // K3
+    // rollback
+    backups.forEach(b => {
+      b.solid.position = b.position;
+      b.solid.speed = b.speed;
+      b.solid.rotation = b.rotation;
+      b.solid.rotationalSpeed = b.rotationalSpeed;
+    });
+    this.applySolutionsToElements(k2);
+    this.moveObjectsAccordingToTheirAcceleration(timeStep / 2);
+    const k3 = this.computeSolutions();
+
+    // K4
+    // rollback
+    backups.forEach(b => {
+      b.solid.position = b.position;
+      b.solid.speed = b.speed;
+      b.solid.rotation = b.rotation;
+      b.solid.rotationalSpeed = b.rotationalSpeed;
+    });
+    this.applySolutionsToElements(k3);
+    this.moveObjectsAccordingToTheirAcceleration(timeStep);
+    const k4 = this.computeSolutions();
+
+    // FINAL SOLUTION
+    // rollback
+    backups.forEach(b => {
+      b.solid.position = b.position;
+      b.solid.speed = b.speed;
+      b.solid.rotation = b.rotation;
+      b.solid.rotationalSpeed = b.rotationalSpeed;
+    });
+
+    // merge solutions together with
+    // S = (1/6) * (K1 + 2xK2 + 2xK3 + K4)
+
+    const k2p = multiplySolution(k2, 2);
+    const k3p = multiplySolution(k3, 2);
+
+    const final = multiplySolution(addSolution(addSolution(addSolution(k1, k2p), k3p), k4), 1 / 6);
+    return final;
+  }
+
+  public runOneStep({ duration, dryRun, disableRungeKutta }: { duration?: number; dryRun?: boolean; disableRungeKutta?: boolean }) {
+    if (!this.initialized) {
+      throw new Error("Please call .initialize() first");
+    }
+    if (!duration || duration < 0 || duration > this.maxTimeStep) {
+      duration = this.maxTimeStep;
+    }
+
+    if (dryRun) {
+      const solutions = this.computeSolutions();
+      this.applySolutionsToElements(solutions);
+    } else {
+      if (disableRungeKutta) {
+        const solutions = this.computeSolutions();
+        this.applySolutionsToElements(solutions);
+        this.moveObjectsAccordingToTheirAcceleration(duration);
+      } else {
+        const solutions = this.computeRungeKuttaOrder4(duration);
+        this.applySolutionsToElements(solutions);
+        this.moveObjectsAccordingToTheirAcceleration(duration);
       }
-
-      // update positions
-      for (const solid of this.solids) {
-        solid.position = solid.position.add(solid.speed.multiply(duration));
-        solid.rotation = solid.rotation.add(solid.rotationalSpeed.multiply(duration));
-      }
-
-      // update time
+      this.fixConstraints();
       this.time += duration;
     }
   }

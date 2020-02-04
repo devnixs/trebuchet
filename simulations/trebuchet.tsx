@@ -18,8 +18,8 @@ const constants = {
   counterWeightLength: 2,
   armMass: 10.65,
   armWidth: 0.2,
-  projectileMass: 0.149,
-  projectileRadius: 0.076,
+  projectileMass: 1,
+  projectileRadius: 0.350/2,
   slingLength: 6.79
 };
 
@@ -29,6 +29,7 @@ interface VizualizerState {
   showForces: boolean;
   speed: number;
   releaseAngle?: number;
+  pauseAfterRelease: boolean;
 }
 
 class Visualizer extends React.Component<{}, VizualizerState> {
@@ -46,7 +47,8 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       showAccelerations: false,
       showSpeeds: true,
       showForces: false,
-      speed: 0.1,
+      pauseAfterRelease: false,
+      speed: 0.2,
       releaseAngle: (45 * Math.PI) / 180
     };
 
@@ -108,7 +110,7 @@ class Visualizer extends React.Component<{}, VizualizerState> {
     const ellapsed = this.start ? new Date().getTime() - this.start.getTime() : 0.01;
     this.start = new Date();
     this.fps = 1000 / ellapsed;
-    this.engine.runOneStep({ duration: (this.state.speed * ellapsed) / 1000 });
+    this.engine.runOneStep({ disableRungeKutta: false, duration: (this.state.speed * ellapsed) / 1000 });
 
     // break the slider if the force becomes positive
     if (this.objects.projectileToGround.forceAppliedToFirstObject.y <= 0) {
@@ -119,7 +121,9 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       const angle = this.objects.projectile.speed.angle();
       if (angle < this.state.releaseAngle) {
         this.detached = true;
-        this.play = false;
+        if(this.state.pauseAfterRelease){
+          this.play = false;
+        }
         this.engine.removeConstraint(this.objects.armProjectilePivot);
         this.releaseVelocity = this.objects.projectile.speed.norm();
       }
