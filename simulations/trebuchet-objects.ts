@@ -8,7 +8,7 @@ import { Matrix33 } from "../engine/models/matrix33";
 export interface TrebuchetSettings {
   lengthOfShortArm: number;
   lengthOfLongArm: number;
-  initialAngle: number;
+  initialAngle?: number;
   heightOfPivot: number;
   counterWeightMass: number;
   counterweightRadius: number;
@@ -35,9 +35,9 @@ export function getTrebuchetObjects(constants: TrebuchetSettings): TrebuchetObje
   const projectileInertia = (2 / 5) * constants.projectileMass * Math.pow(constants.projectileRadius, 2);
 
   const armInertiaValue = (constants.armMass * (Math.pow(constants.lengthOfLongArm + constants.lengthOfShortArm, 2) ^ 2)) / 12;
-  console.log("armInertiaValue", armInertiaValue);
-  console.log("projectileInertia", projectileInertia);
-  console.log("counterWeightInertia", counterWeightInertia);
+
+  const initialAngle = Math.asin(constants.heightOfPivot / constants.lengthOfLongArm);
+  constants.initialAngle = initialAngle;
 
   var counterweight = new Solid({
     name: "Counterweight",
@@ -72,7 +72,7 @@ export function getTrebuchetObjects(constants: TrebuchetSettings): TrebuchetObje
 
   const tipOfArm = new Vector3(
     -constants.lengthOfLongArm * Math.cos(constants.initialAngle),
-    -constants.lengthOfLongArm * Math.cos(constants.initialAngle) + constants.heightOfPivot,
+    -constants.lengthOfLongArm * Math.sin(constants.initialAngle) + constants.heightOfPivot,
     0
   );
 

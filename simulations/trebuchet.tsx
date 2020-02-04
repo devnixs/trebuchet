@@ -11,15 +11,15 @@ import lodash from "lodash";
 const constants = {
   lengthOfShortArm: 1.75,
   lengthOfLongArm: 6.792,
-  initialAngle: Math.PI / 4,
+  initialAngle: undefined, // computed so that the arm touches the ground
   heightOfPivot: 5,
   counterWeightMass: 98,
   counterweightRadius: 0.16,
   counterWeightLength: 2,
   armMass: 10.65,
   armWidth: 0.2,
-  projectileMass: 1,
-  projectileRadius: 0.350/2,
+  projectileMass: 0.149,
+  projectileRadius: 0.076 / 2,
   slingLength: 6.79
 };
 
@@ -40,6 +40,7 @@ class Visualizer extends React.Component<{}, VizualizerState> {
   objects: TrebuchetObjects;
   detached: boolean;
   releaseVelocity?: number;
+  initialProjectileToGroundForce: number;
 
   constructor(props) {
     super(props);
@@ -47,8 +48,8 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       showAccelerations: false,
       showSpeeds: true,
       showForces: false,
-      pauseAfterRelease: false,
-      speed: 0.2,
+      pauseAfterRelease: true,
+      speed: 1,
       releaseAngle: (45 * Math.PI) / 180
     };
 
@@ -67,11 +68,13 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       constraints: [this.objects.armPivot, this.objects.armCounterweightPivot, this.objects.armProjectilePivot, this.objects.projectileToGround],
       gravity: 9.8,
       solids: [this.objects.arm, this.objects.counterweight, this.objects.projectile],
-      timeStep: 0.02,
+      timeStep: 0.001,
+      enableRungeKutta: false,
       energyDissipationCoefficient: 0 // 0.05
     });
     this.engine.initialize();
     this.engine.runOneStep({ dryRun: true });
+    this.initialProjectileToGroundForce = this.objects.projectileToGround.forceAppliedToFirstObject.y;
   }
 
   computeViewBox() {
@@ -101,37 +104,46 @@ class Visualizer extends React.Component<{}, VizualizerState> {
 
   async run() {
     this.play = true;
-    this.start = null;
-    window.requestAnimationFrame(this.step);
+    this.renderView();
+
+    while (this.play) {
+      const start = new Date();
+      this.engine.runOneStep({});
+
+      // break the slider if the force is almost zero
+      if (this.objects.projectileToGround.forceAppliedToFirstObject.y <= this.initialProjectileToGroundForce / 10) {
+        this.engine.removeConstraint(this.objects.projectileToGround);
+      }
+
+      if (this.state.releaseAngle && !this.detached) {
+        const angle = this.objects.projectile.speed.angle();
+        if (angle < this.state.releaseAngle) {
+          this.detached = true;
+          if (this.state.pauseAfterRelease) {
+            this.play = false;
+          }
+          this.engine.removeConstraint(this.objects.armProjectilePivot);
+          this.releaseVelocity = this.objects.projectile.speed.norm();
+        }
+      }
+      this.lastComputationHasBeenRendered = false;
+
+      const ellapsed = (new Date().getTime() - start.getTime()) / 1000;
+      const waitDuration = Math.max(0, this.engine.timeStep / this.state.speed - ellapsed);
+      this.fps = 1 / ellapsed;
+
+      await new Promise(r => setTimeout(r, waitDuration * 1000));
+    }
   }
 
-  start: Date | null = null;
-  step = () => {
-    const ellapsed = this.start ? new Date().getTime() - this.start.getTime() : 0.01;
-    this.start = new Date();
-    this.fps = 1000 / ellapsed;
-    this.engine.runOneStep({ disableRungeKutta: false, duration: (this.state.speed * ellapsed) / 1000 });
-
-    // break the slider if the force becomes positive
-    if (this.objects.projectileToGround.forceAppliedToFirstObject.y <= 0) {
-      this.engine.removeConstraint(this.objects.projectileToGround);
+  lastComputationHasBeenRendered: boolean;
+  renderView = () => {
+    if (!this.lastComputationHasBeenRendered) {
+      this.forceUpdate();
+      this.lastComputationHasBeenRendered = true;
     }
-
-    if (this.state.releaseAngle && !this.detached) {
-      const angle = this.objects.projectile.speed.angle();
-      if (angle < this.state.releaseAngle) {
-        this.detached = true;
-        if(this.state.pauseAfterRelease){
-          this.play = false;
-        }
-        this.engine.removeConstraint(this.objects.armProjectilePivot);
-        this.releaseVelocity = this.objects.projectile.speed.norm();
-      }
-    }
-    this.forceUpdate();
-
     if (this.play) {
-      window.requestAnimationFrame(this.step);
+      window.requestAnimationFrame(this.renderView);
     }
   };
 
@@ -155,21 +167,49 @@ class Visualizer extends React.Component<{}, VizualizerState> {
   render() {
     return (
       <div>
-        <button className="btn btn-danger" onClick={() => this.reset()}>
-          Reset
-        </button>
-        <button className="btn btn-info" onClick={() => this.runOneStep()}>
-          Next Step
-        </button>
-        {!this.play ? (
-          <button className="btn btn-primary" onClick={() => this.run()}>
-            Play
+        <form className="form-inline">
+          <button type="button" className="btn btn-danger" onClick={() => this.reset()}>
+            Reset
           </button>
-        ) : (
-          <button className="btn btn-warning" onClick={() => (this.play = false)}>
-            Stop
+          <button type="button" className="btn btn-info" onClick={() => this.runOneStep()}>
+            Next Step
           </button>
-        )}
+          {!this.play ? (
+            <button type="button" className="btn btn-primary" onClick={() => this.run()}>
+              Play
+            </button>
+          ) : (
+            <button type="button" className="btn btn-warning" onClick={() => (this.play = false)}>
+              Stop
+            </button>
+          )}
+          <label className="ml-5" htmlFor="speed">
+            Speed:
+          </label>
+          <input
+            id="speed"
+            type="range"
+            min="1"
+            max="20"
+            value={this.state.speed * 10}
+            onChange={e => this.setState({ speed: Number(e.target.value) / 10 })}
+            className="form-control"
+          ></input>
+          x{this.state.speed}
+          <div className="custom-control custom-checkbox mb-2 ml-5 mr-sm-2">
+            <input
+              className="custom-control-input"
+              checked={this.state.pauseAfterRelease}
+              onChange={e => this.setState({ pauseAfterRelease: e.target.checked })}
+              type="checkbox"
+              id="pauseAfterRelease"
+            />
+            <label className="custom-control-label" htmlFor="pauseAfterRelease">
+              Pause after release
+            </label>
+          </div>
+        </form>
+
         <div>
           <svg
             style={{ width: "100vw", height: "calc(100vh - 50px)" }}

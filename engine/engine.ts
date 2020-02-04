@@ -18,21 +18,24 @@ interface EngineSettings {
   gravity: number;
 
   energyDissipationCoefficient: number;
+  enableRungeKutta: boolean;
 }
 
 export class Engine {
   solids: Solid[];
   constraints: Constraint[];
-  maxTimeStep: number;
+  timeStep: number;
   gravity: number;
   initialized: boolean;
   time = 0;
   energyDissipationCoefficient: number;
+  enableRungeKutta: boolean;
   constructor(settings: EngineSettings) {
     this.solids = settings.solids;
     this.constraints = settings.constraints;
-    this.maxTimeStep = settings.timeStep;
+    this.timeStep = settings.timeStep;
     this.gravity = settings.gravity;
+    this.enableRungeKutta = settings.enableRungeKutta;
     this.energyDissipationCoefficient = settings.energyDissipationCoefficient;
   }
 
@@ -509,27 +512,25 @@ export class Engine {
     return final;
   }
 
-  public runOneStep({ duration, dryRun, disableRungeKutta }: { duration?: number; dryRun?: boolean; disableRungeKutta?: boolean }) {
+  public runOneStep({ dryRun }: { dryRun?: boolean }) {
     if (!this.initialized) {
       throw new Error("Please call .initialize() first");
     }
-    if (!duration || duration < 0 || duration > this.maxTimeStep) {
-      duration = this.maxTimeStep;
-    }
+
+    const duration = this.timeStep;
 
     if (dryRun) {
       const solutions = this.computeSolutions();
       this.applySolutionsToElements(solutions);
     } else {
-      if (disableRungeKutta) {
-        const solutions = this.computeSolutions();
-        this.applySolutionsToElements(solutions);
-        this.moveObjectsAccordingToTheirAcceleration(duration);
+      let solutions: Solution[];
+      if (this.enableRungeKutta) {
+        solutions = this.computeRungeKuttaOrder4(duration);
       } else {
-        const solutions = this.computeRungeKuttaOrder4(duration);
-        this.applySolutionsToElements(solutions);
-        this.moveObjectsAccordingToTheirAcceleration(duration);
+        solutions = this.computeSolutions();
       }
+      this.applySolutionsToElements(solutions);
+      this.moveObjectsAccordingToTheirAcceleration(duration);
       this.fixConstraints();
       this.time += duration;
     }
