@@ -46,7 +46,7 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       showAccelerations: false,
       showSpeeds: true,
       showForces: false,
-      speed: 1,
+      speed: 0.1,
       releaseAngle: (45 * Math.PI) / 180
     };
 
@@ -286,7 +286,7 @@ class Visualizer extends React.Component<{}, VizualizerState> {
               }, ${this.updatePointPositionToFitCanvas(this.objects.projectile.position).y})`}
               cx={this.updatePointPositionToFitCanvas(this.objects.projectile.position).x}
               cy={this.updatePointPositionToFitCanvas(this.objects.projectile.position).y}
-              r={constants.projectileRadius * 5}
+              r={0.3}
               fill="#FFF"
             />
 
