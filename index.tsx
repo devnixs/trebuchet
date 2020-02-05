@@ -9,4 +9,4 @@ import { computeInversionWithMathJs, computeInversionWithHomemadeScript, runMatr
 
 ReactDOM.render(<Trebuchet />, document.getElementById("react-root"));
 
-//runMatrixBenchmark();
+// runMatrixBenchmark();

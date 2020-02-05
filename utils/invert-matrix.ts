@@ -1,107 +1,194 @@
-// Returns the inverse of matrix `M`.
-export function matrix_invert(M) {
-  // I use Guassian Elimination to calculate the inverse:
-  // (1) 'augment' the matrix (left) by the identity (on the right)
-  // (2) Turn the matrix on the left into the identity by elemetry row ops
-  // (3) The matrix on the right is the inverse (was the identity matrix)
-  // There are 3 elemtary row ops: (I combine b and c in my code)
-  // (a) Swap 2 rows
-  // (b) Multiply a row by a scalar
-  // (c) Add 2 rows
+var Sylvester: any = {};
 
-  //if the matrix isn't square: exit (error)
-  if (M.length !== M[0].length) {
-    throw new Error("Matrix is not square. Aborting");
-  }
+Sylvester.Matrix = function() {};
 
-  //create the identity matrix (I), and a copy (C) of the original
-  var i = 0,
-    ii = 0,
-    j = 0,
-    dim = M.length,
-    e = 0,
-    t = 0;
-  var I = [],
-    C = [];
-  for (i = 0; i < dim; i += 1) {
-    // Create the row
-    I[I.length] = [];
-    C[C.length] = [];
-    for (j = 0; j < dim; j += 1) {
-      //if we're on the diagonal, put a 1 (for identity)
-      if (i == j) {
-        I[i][j] = 1;
-      } else {
-        I[i][j] = 0;
-      }
+Sylvester.Matrix.create = function(elements) {
+  var M = new Sylvester.Matrix();
+  return M.setElements(elements);
+};
 
-      // Also, make the copy of the original
-      C[i][j] = M[i][j];
+Sylvester.Matrix.I = function(n) {
+  var els = [],
+    i = n,
+    j;
+  while (i--) {
+    j = n;
+    els[i] = [];
+    while (j--) {
+      els[i][j] = i === j ? 1 : 0;
     }
   }
+  return Sylvester.Matrix.create(els);
+};
 
-  // Perform elementary row operations
-  for (i = 0; i < dim; i += 1) {
-    // get the element e on the diagonal
-    e = C[i][i];
+Sylvester.Matrix.prototype = {
+  dup: function() {
+    return Sylvester.Matrix.create(this.elements);
+  },
 
-    // if we have a 0 on the diagonal (we'll need to swap with a lower row)
-    if (e == 0) {
-      //look through every row below the i'th row
-      for (ii = i + 1; ii < dim; ii += 1) {
-        //if the ii'th row has a non-0 in the i'th col
-        if (C[ii][i] != 0) {
-          //it would make the diagonal have a non-0 so swap it
-          for (j = 0; j < dim; j++) {
-            e = C[i][j]; //temp store i'th row
-            C[i][j] = C[ii][j]; //replace i'th row by ii'th
-            C[ii][j] = e; //repace ii'th by temp
-            e = I[i][j]; //temp store i'th row
-            I[i][j] = I[ii][j]; //replace i'th row by ii'th
-            I[ii][j] = e; //repace ii'th by temp
+  isSquare: function() {
+    var cols = this.elements.length === 0 ? 0 : this.elements[0].length;
+    return this.elements.length === cols;
+  },
+
+  toRightTriangular: function() {
+    if (this.elements.length === 0) return Sylvester.Matrix.create([]);
+    var M = this.dup(),
+      els;
+    var n = this.elements.length,
+      i,
+      j,
+      np = this.elements[0].length,
+      p;
+    for (i = 0; i < n; i++) {
+      if (M.elements[i][i] === 0) {
+        for (j = i + 1; j < n; j++) {
+          if (M.elements[j][i] !== 0) {
+            els = [];
+            for (p = 0; p < np; p++) {
+              els.push(M.elements[i][p] + M.elements[j][p]);
+            }
+            M.elements[i] = els;
+            break;
           }
-          //don't bother checking other rows since we've swapped
-          break;
         }
       }
-      //get the new diagonal
-      e = C[i][i];
-      //if it's still 0, not invertable (error)
-      if (e == 0) {
-        throw new Error("Matrix is not invertable");
+      if (M.elements[i][i] !== 0) {
+        for (j = i + 1; j < n; j++) {
+          var multiplier = M.elements[j][i] / M.elements[i][i];
+          els = [];
+          for (p = 0; p < np; p++) {
+            // Elements with column numbers up to an including the number of the
+            // row that we're subtracting can safely be set straight to zero,
+            // since that's the point of this routine and it avoids having to
+            // loop over and correct rounding errors later
+            els.push(p <= i ? 0 : M.elements[j][p] - M.elements[i][p] * multiplier);
+          }
+          M.elements[j] = els;
+        }
       }
     }
+    return M;
+  },
 
-    // Scale this row down by e (so we have a 1 on the diagonal)
-    for (j = 0; j < dim; j++) {
-      C[i][j] = C[i][j] / e; //apply to original matrix
-      I[i][j] = I[i][j] / e; //apply to identity
+  determinant: function() {
+    if (this.elements.length === 0) {
+      return 1;
     }
+    if (!this.isSquare()) {
+      return null;
+    }
+    var M = this.toRightTriangular();
+    var det = M.elements[0][0],
+      n = M.elements.length;
+    for (var i = 1; i < n; i++) {
+      det = det * M.elements[i][i];
+    }
+    return det;
+  },
 
-    // Subtract this row (scaled appropriately for each row) from ALL of
-    // the other rows so that there will be 0's in this column in the
-    // rows above and below this one
-    for (ii = 0; ii < dim; ii++) {
-      // Only apply to other rows (we want a 1 on the diagonal)
-      if (ii == i) {
-        continue;
-      }
+  isSingular: function() {
+    return this.isSquare() && this.determinant() === 0;
+  },
 
-      // We want to change this element to 0
-      e = C[ii][i];
-
-      // Subtract (the row above(or below) scaled by e) from (the
-      // current row) but start at the i'th column and assume all the
-      // stuff left of diagonal is 0 (which it should be if we made this
-      // algorithm correctly)
-      for (j = 0; j < dim; j++) {
-        C[ii][j] -= e * C[i][j]; //apply to original matrix
-        I[ii][j] -= e * I[i][j]; //apply to identity
+  augment: function(matrix) {
+    if (this.elements.length === 0) {
+      return this.dup();
+    }
+    var M = matrix.elements || matrix;
+    if (typeof M[0][0] === "undefined") {
+      M = Sylvester.Matrix.create(M).elements;
+    }
+    var T = this.dup(),
+      cols = T.elements[0].length;
+    var i = T.elements.length,
+      nj = M[0].length,
+      j;
+    if (i !== M.length) {
+      return null;
+    }
+    while (i--) {
+      j = nj;
+      while (j--) {
+        T.elements[i][cols + j] = M[i][j];
       }
     }
+    return T;
+  },
+
+  inverse: function() {
+    if (this.elements.length === 0) {
+      return null;
+    }
+    if (!this.isSquare() || this.isSingular()) {
+      return null;
+    }
+    var n = this.elements.length,
+      i = n,
+      j;
+    var M = this.augment(Sylvester.Matrix.I(n)).toRightTriangular();
+    var np = M.elements[0].length,
+      p,
+      els,
+      divisor;
+    var inverse_elements = [],
+      new_element;
+    // Sylvester.Matrix is non-singular so there will be no zeros on the
+    // diagonal. Cycle through rows from last to first.
+    while (i--) {
+      // First, normalise diagonal elements to 1
+      els = [];
+      inverse_elements[i] = [];
+      divisor = M.elements[i][i];
+      for (p = 0; p < np; p++) {
+        new_element = M.elements[i][p] / divisor;
+        els.push(new_element);
+        // Shuffle off the current row of the right hand side into the results
+        // array as it will not be modified by later runs through this loop
+        if (p >= n) {
+          inverse_elements[i].push(new_element);
+        }
+      }
+      M.elements[i] = els;
+      // Then, subtract this row from those above it to give the identity matrix
+      // on the left hand side
+      j = i;
+      while (j--) {
+        els = [];
+        for (p = 0; p < np; p++) {
+          els.push(M.elements[j][p] - M.elements[i][p] * M.elements[j][i]);
+        }
+        M.elements[j] = els;
+      }
+    }
+    return Sylvester.Matrix.create(inverse_elements);
+  },
+
+  setElements: function(els) {
+    var i,
+      j,
+      elements = els.elements || els;
+    if (elements[0] && typeof elements[0][0] !== "undefined") {
+      i = elements.length;
+      this.elements = [];
+      while (i--) {
+        j = elements[i].length;
+        this.elements[i] = [];
+        while (j--) {
+          this.elements[i][j] = elements[i][j];
+        }
+      }
+      return this;
+    }
+    var n = elements.length;
+    this.elements = [];
+    for (i = 0; i < n; i++) {
+      this.elements.push([elements[i]]);
+    }
+    return this;
   }
+};
 
-  //we've done all operations, C should be the identity
-  //matrix I should be the inverse:
-  return I;
-}
+export function invertMatrix(elements) {
+  return Sylvester.Matrix.create(elements).inverse().elements;
+};
