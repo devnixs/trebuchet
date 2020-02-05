@@ -1,12 +1,15 @@
-import { Matrix, zeros as emptyMatrix, index as MathJsIndex, multiply, inv as inverseMatrix } from "mathjs";
+import { Matrix, multiply, inv as inverseMatrix } from "mathjs";
+import * as MathJs from "mathjs";
 import { Equation, EquationTerm, Solution } from "./equation";
 import lodash from "lodash";
+import { emptyMatrix } from "../../utils/matrix-utils";
+import { matrix_invert } from "../../utils/invert-matrix";
 
 export class Solver {
   constructor(private equations: Equation[]) {}
 
   createUnknownId(term: EquationTerm) {
-    return term.unknownFactor + "-->" + (term.element ? term.element.name : 'none');
+    return term.unknownFactor + "-->" + (term.element ? term.element.name : "none");
   }
 
   solve() {
@@ -26,8 +29,8 @@ export class Solver {
       throw new Error("System is overconstrained");
     }
 
-    var equationMatrix = emptyMatrix(this.equations.length, uniqueUnknowns.length) as Matrix;
-    const constantsMatrix = emptyMatrix(this.equations.length, 1) as Matrix;
+    var equationMatrix = emptyMatrix(this.equations.length, uniqueUnknowns.length) as number[][];
+    const constantsMatrix = emptyMatrix(this.equations.length, 1) as number[][];
 
     for (let equationIndex = 0; equationIndex < this.equations.length; equationIndex++) {
       const equation = this.equations[equationIndex];
@@ -36,30 +39,38 @@ export class Solver {
 
         const coefficients = equation.terms.filter(i => this.createUnknownId(i) === this.createUnknownId(unknown));
         const coefficient = lodash.sumBy(coefficients, i => i.value);
-        equationMatrix.subset(MathJsIndex(equationIndex, unknownIndex), coefficient);
+        equationMatrix[equationIndex][unknownIndex] = coefficient;
       }
 
       const constants = equation.terms.filter(i => i.unknownFactor === "none");
       const constantSum = lodash.sumBy(constants, i => i.value);
-      constantsMatrix.subset(MathJsIndex(equationIndex, 0), constantSum);
+      constantsMatrix[equationIndex][0] = constantSum;
     }
 
-    let inversedMatrix: Matrix;
+    let inversedMatrix: number[][];
+    let inversedMatrix2: number[][];
     try {
-      inversedMatrix = inverseMatrix(equationMatrix);
+      inversedMatrix = MathJs.inv(equationMatrix);
+      inversedMatrix2 = matrix_invert(equationMatrix);
+      // console.log(inversedMatrix, inversedMatrix2);
     } catch (e) {
-      console.error("Could not find solutions to this system", e);
+      console.error("System is hyperstatic", e);
       throw e;
     }
 
-    const test = multiply(inversedMatrix, equationMatrix);
+    const test1 = MathJs.multiply(inversedMatrix, equationMatrix);
+    const test2 = MathJs.multiply(inversedMatrix2, equationMatrix);
+    console.log(test1, test2)
+    const solutionVector1 = MathJs.multiply(inversedMatrix, constantsMatrix);
+    const solutionVector2= MathJs.multiply(inversedMatrix2, constantsMatrix);
 
-    const solutionVector = multiply(inversedMatrix, constantsMatrix);
-
-    return uniqueUnknowns.map((u, index) => ({
-      unknown: u.unknownFactor,
-      value: solutionVector.subset(MathJsIndex(index, 0)) as any as number,
-      element: u.element
-    } as Solution));
+    return uniqueUnknowns.map(
+      (u, index) =>
+        ({
+          unknown: u.unknownFactor,
+          value: solutionVector[index][0],
+          element: u.element
+        } as Solution)
+    );
   }
 }

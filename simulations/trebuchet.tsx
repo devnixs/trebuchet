@@ -106,7 +106,9 @@ class Visualizer extends React.Component<{}, VizualizerState> {
     this.play = true;
     this.renderView();
 
+    let counter = 0;
     while (this.play) {
+      counter++;
       const start = new Date();
       this.engine.runOneStep({});
 
@@ -132,7 +134,14 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       const waitDuration = Math.max(0, this.engine.timeStep / this.state.speed - ellapsed);
       this.fps = 1 / ellapsed;
 
-      await new Promise(r => setTimeout(r, waitDuration * 1000));
+      if (waitDuration > 0) {
+        await new Promise(r => setTimeout(r, waitDuration * 1000));
+      } else {
+        if (counter % 5 === 0) {
+          // freeup the thread once in a while
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
     }
   }
 
