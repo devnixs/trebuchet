@@ -68,7 +68,7 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       constraints: [this.objects.armPivot, this.objects.armCounterweightPivot, this.objects.armProjectilePivot, this.objects.projectileToGround],
       gravity: 9.8,
       solids: [this.objects.arm, this.objects.counterweight, this.objects.projectile],
-      timeStep: 0.001,
+      timeStep: 0.002,
       enableRungeKutta: false,
       energyDissipationCoefficient: 0 // 0.05
     });
@@ -106,7 +106,9 @@ class Visualizer extends React.Component<{}, VizualizerState> {
     this.play = true;
     this.renderView();
 
+    let counter = 0;
     while (this.play) {
+      counter++;
       const start = new Date();
       this.engine.runOneStep({});
 
@@ -131,8 +133,14 @@ class Visualizer extends React.Component<{}, VizualizerState> {
       const ellapsed = (new Date().getTime() - start.getTime()) / 1000;
       const waitDuration = Math.max(0, this.engine.timeStep / this.state.speed - ellapsed);
       this.fps = 1 / ellapsed;
-
-      await new Promise(r => setTimeout(r, waitDuration * 1000));
+      if (waitDuration > 0) {
+        await new Promise(r => setTimeout(r, waitDuration * 1000));
+      } else {
+        if (counter % 10 === 0) {
+          // freeup the thread once in a while
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
     }
   }
 
