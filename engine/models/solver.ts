@@ -2,7 +2,7 @@ import { Matrix, multiply, inv as inverseMatrix } from "mathjs";
 import * as MathJs from "mathjs";
 import { Equation, EquationTerm, Solution } from "./equation";
 import lodash from "lodash";
-import { emptyMatrix } from "../../utils/matrix-utils";
+import { emptyMatrix, matrixDeterminant } from "../../utils/matrix-utils";
 import { invertMatrix } from "../../utils/invert-matrix";
 
 export class Solver {
@@ -39,7 +39,9 @@ export class Solver {
 
         const coefficients = equation.terms.filter(i => this.createUnknownId(i) === this.createUnknownId(unknown));
         const coefficient = lodash.sumBy(coefficients, i => i.value);
-        equationMatrix[equationIndex][unknownIndex] = coefficient;
+        if(coefficient > 1e-12 || coefficient < -1e-12){
+          equationMatrix[equationIndex][unknownIndex] = coefficient;
+        }
       }
 
       const constants = equation.terms.filter(i => i.unknownFactor === "none");
@@ -50,6 +52,8 @@ export class Solver {
     let inversedMatrix: number[][];
     let inversedMatrix2: number[][];
     try {
+      const det = matrixDeterminant(equationMatrix);
+      const det2 = MathJs.det(equationMatrix);
       inversedMatrix = MathJs.inv(equationMatrix);
       inversedMatrix2 = invertMatrix(equationMatrix);
       // console.log(inversedMatrix, inversedMatrix2);
@@ -60,7 +64,6 @@ export class Solver {
 
     const test1 = MathJs.multiply(inversedMatrix, equationMatrix);
     const test2 = MathJs.multiply(inversedMatrix2, equationMatrix);
-    console.log(test2);
     //console.log(test1, test2);
     const solutionVector1 = MathJs.multiply(inversedMatrix, constantsMatrix);
     const solutionVector2 = MathJs.multiply(inversedMatrix2, constantsMatrix);

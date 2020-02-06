@@ -9,3 +9,27 @@ export function emptyMatrix(rows: number, columns: number) {
   }
   return matrix1;
 }
+
+export function matrixDeterminant(matrix: number[][]) {
+  let positiveSum = 0;
+  const matrixSize = matrix.length;
+  for (let i = 0; i < matrixSize; i++) {
+    let product = 1;
+    for (let j = 0; j < matrixSize; j++) {
+      product = product * matrix[(i + j) % matrixSize][j];
+    }
+    positiveSum += product;
+  }
+
+  let negativeSum = 0;
+  for (let i = 0; i < matrixSize; i++) {
+    let product = 1;
+    for (let j = 0; j < matrixSize; j++) {
+      product = product * matrix[j][(2 * matrixSize - (i + j) - 1) % matrixSize];
+    }
+    negativeSum -= product;
+  }
+
+  const total = positiveSum + negativeSum;
+  return total;
+}

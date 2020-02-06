@@ -190,5 +190,18 @@ Sylvester.Matrix.prototype = {
 };
 
 export function invertMatrix(elements) {
-  return Sylvester.Matrix.create(elements).inverse().elements;
+  const mat = Sylvester.Matrix.create(elements);
+  const inv = mat.inverse();
+  const data = inv.elements;
+  return data;
 };
+
+
+function test(){
+  debugger;
+  var a = Sylvester.Matrix.create([[0,1,0,0],[1,0,0,0],[0,0,0,1],[0,0,1,0]]);
+  var b = a.toRightTriangular();
+  var c = a.inverse();
+  console.log('b',b);
+}
+test();
