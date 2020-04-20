@@ -35,9 +35,9 @@ class Visualizer extends React.Component<{}, VizualizerState> {
     super(props);
     this.state = {
       showAccelerations: false,
-      showSpeeds: true,
+      showSpeeds: false,
       showForces: false,
-      pauseAfterRelease: true,
+      pauseAfterRelease: false,
       speed: 1,
       settings: defaultTrebuchetSettings,
       releaseAngle: (45 * Math.PI) / 180
