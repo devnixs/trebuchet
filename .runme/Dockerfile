@@ -4,4 +4,4 @@ COPY . .
 RUN npm install
 RUN npm run build
 RUN npm install -g http-server
-RUN http-server ./dist/
+ENTRYPOINT http-server ./dist/
